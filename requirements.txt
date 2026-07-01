@@ -9,13 +9,22 @@ statsmodels>=0.14
 matplotlib>=3.8
 seaborn>=0.13
 
-# Competition SDK
-# Overview references 1.14.10 but that version is not on PyPI (list skips from 1.14.9
-# to 1.14.11 — presumably yanked). Using 1.14.11 as the closest stable release.
-kaggle-environments==1.14.11
-# The cabt engine (imported as `cg.api`) is expected to ship inside the
-# kaggle-environments package. Confirm locally with:
-#   python -c "from cg.api import Observation, to_observation_class"
+# Competition SDK — NOT installed via this file.
+#
+# The kaggle-environments package declares `vec_noise` as a required dependency,
+# but vec_noise 1.1.4 (2019, abandoned) has a broken setup.py that fails on any
+# modern setuptools. vec_noise is only used by the Halite env; PTCG doesn't need it.
+#
+# Also, the `cabt` env (PTCG) was added AFTER version 1.14.11 (the overview's
+# reference version). We use the latest kaggle-environments release, which
+# bundles the `cabt` env and its `cg/` module.
+#
+# Install kaggle-environments AFTER `pip install -r requirements.txt`, with:
+#
+#     pip install --no-deps kaggle-environments
+#     pip install requests flask jsonschema
+#
+# See docs/engineering.md for the full recipe and verification steps.
 
 # Dev / test tooling
 pytest>=8.0

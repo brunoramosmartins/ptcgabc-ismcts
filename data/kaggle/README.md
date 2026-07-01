@@ -30,12 +30,20 @@ Columns: `Card ID`, `Card Name`, `Expansion`, `Collection No.`, `Stage (Pokémon
 
 ## Sample Submission
 
-The Kaggle-provided `sample_submission/main.py` is the canonical template for the Simulation Category. Key takeaways for our own agent:
+The Kaggle-provided `sample_submission/main.py` is **historical reference only** — it is stale relative to `kaggle-environments >= 1.30`. It opens with
+
+```python
+from cg.api import Observation, to_observation_class
+```
+
+but `cg.api` **does not exist** in the current SDK (`cg/__init__.py` is empty, no `api` submodule). The sample was written for an older SDK snapshot that had a wrapper class.
+
+**Canonical reference for the agent contract** is now `kaggle_environments/envs/cabt/cabt.py::random_agent` (installed in your venv). Key points:
 
 - Entry point: `def agent(obs_dict: dict) -> list[int]`
-- Convert the raw dict via `to_observation_class` from `cg.api`
-- On the initial call, `obs.select is None` — return the 60 card IDs of the deck (read from `deck.csv`)
-- On every other call, return a list of indices into `obs.select.option`, of length in `[obs.select.minCount, obs.select.maxCount]`, with no duplicates
-- At runtime the file lives at `/kaggle_simulations/agent/deck.csv`; locally it lives next to `main.py`
+- The observation is a **plain dict** — index with `obs["select"]`, not `obs.select`.
+- On the initial call, `obs["select"] is None` — return the 60 card IDs of the deck.
+- On every other call, return a list of indices into `obs["select"]["option"]`, length in `[obs["select"]["minCount"], obs["select"]["maxCount"]]`, no duplicates.
+- At runtime the deck file lives at `/kaggle_simulations/agent/deck.csv`; locally it lives next to `main.py`.
 
-Our own submission (`scripts/submit.py`) bundles `main.py` + `deck.csv` following this same convention.
+Our submission tooling (`scripts/submit.py`) bundles `main.py` + `deck.csv` following this same convention. See `docs/engineering.md` for the full recipe.
