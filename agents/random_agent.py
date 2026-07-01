@@ -1,14 +1,21 @@
-"""Random agent — Phase 0 ladder floor. To implement in Phase 0."""
+"""Random agent — Phase 0 ladder floor.
+
+Picks `maxCount` distinct option indices uniformly at random. Mirrors the
+reference `random_agent` from `kaggle_environments/envs/cabt/cabt.py`.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+import random
 
 from agents.base import Agent
 
 
 class RandomAgent(Agent):
-    """Picks `maxCount` distinct option indices uniformly at random."""
+    def __init__(self, rng: random.Random | None = None) -> None:
+        self.rng = rng or random.Random()
 
-    def choose(self, obs: Any) -> list[int]:
-        raise NotImplementedError("Implement in Phase 0 — see data/kaggle/sample_submission/main.py.")
+    def choose(self, obs: dict) -> list[int]:
+        n_options = len(obs["select"]["option"])
+        max_count = obs["select"]["maxCount"]
+        return self.rng.sample(range(n_options), max_count)

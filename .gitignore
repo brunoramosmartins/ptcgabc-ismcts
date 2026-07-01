@@ -6,9 +6,10 @@ __pycache__/
 .Python
 
 # Virtual environments
+# NOTE: do NOT ignore `env/` — that's our own Python package (env/wrapper.py etc.).
+# If a virtualenv is ever created under this repo, name it `.venv/` (already covered).
 .venv/
 venv/
-env/
 ENV/
 
 # Distribution / packaging
