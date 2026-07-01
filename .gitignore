@@ -86,3 +86,6 @@ submission*.tar.gz
 *.orig
 *~
 *.code-workspace
+
+# Claude Code — local-only agent config (project + personal)
+.claude/
