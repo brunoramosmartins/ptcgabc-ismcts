@@ -18,4 +18,4 @@ Every experiment MUST be registered here BEFORE running. One row per experiment.
 
 | ID | Phase | Hypothesis | Objective | Configuration | Expected | Actual |
 |---|---|---|---|---|---|---|
-| _ | _ | _ | _ | _ | _ | _ |
+| EXP-001 | 0 | baseline | Establish the Kaggle-ladder floor and validate the end-to-end submission pipeline (bundle → upload → Validation Episode → rating). | Agent: `RandomAgent` (uniform over `obs["select"]["option"]`, `maxCount` draws). Deck: `decks/selected/deck.csv` (Phase 0 placeholder — Kaggle sample deck). Git tag at submission: `v0.1-setup`. Seeds: RNG in `main.py` unseeded (Kaggle worker RNG). N matches: as awarded by the ladder scheduler. Hardware: Kaggle sandbox (2 vCPU, 12.2 GiB). | Rating stabilizes below the heuristic baseline that arrives in Phase 1 (EXP-002). Concrete Phase 0 target: `Validation Episode` passes; ladder rating settles in the µ₀ = 600 neighborhood within the first week — no strong prior on the exact number. | _pending — filled in once the ladder rating stabilizes; see `docs/submission-log.md`._ |
