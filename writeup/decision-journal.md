@@ -63,3 +63,67 @@ and the repo scaffold).
 
 _None this week — the Phase 0 issues were mechanical. Track here if the
 Kaggle Validation Episode rejects the bundle._
+
+---
+
+## Week 2 (7 Jul – 13 Jul 2026) — Phase 1
+
+### 2026-07-01 — Phase 1 kickoff: formalization, benchmark, heuristic baseline
+
+Closed all five Phase 1 deliverables in one sitting.
+
+**What landed.**
+
+- `docs/mdp-formalization.md` — formal $S$, $A(s)$, $R$, $I(s)$ with the
+  two required Mermaid diagrams (logical flow + software pipeline).
+- `exercises/ex01_environment.md` — the four exercises answered, feeding
+  the formalization.
+- `docs/benchmark-protocol.md` — finalized. N = 200 (Phase 1–4 iteration),
+  N = 500 (Phase 5 hypothesis tests), K = 20, paired match seeds.
+- `agents/heuristic_agent.py` — deterministic first-`maxCount` selector
+  with an overridable `score` hook.
+- `submissions/heuristic_main.py` — standalone Kaggle shim mirroring the
+  internal heuristic. Bundle command lives in the file docstring.
+- `scripts/local_ladder.py` — head-to-head runner with Wilson CI
+  reporting; lazy-imports `kaggle_environments`.
+- `stats/wilson.py` — closed-form Wilson interval; brought forward from
+  Phase 3/5 because EXP-002a needs it now.
+- Tests: `test_agents.py`, `test_wilson.py`, `test_local_ladder.py`,
+  `test_heuristic_shim.py`.
+- EXP-002a (local head-to-head) and EXP-002b (Kaggle ladder) registered
+  in `experiments/registry.md`. Row #2 pending upload in
+  `docs/submission-log.md`.
+- `notes/phase1-baseline-analysis.md` with the metrics-to-hit checklist.
+
+**Key non-trivial decisions this week.**
+
+- **Heuristic = deterministic first-`maxCount`**, not a semantic scorer.
+  Reason: minimizes coupling with the Phase 4 evaluator (ADR-003) that
+  will do the real feature engineering. If EXP-002a fails to beat random
+  by a CI-separated margin, the fallback is a two-line string-match
+  scorer over option names — but that's a response to evidence, not the
+  initial design. Cheaper to test the "engine option order is not random"
+  hypothesis first with a zero-feature baseline.
+- **Wilson interval implemented in Phase 1, not Phase 5.** The scaffold
+  scheduled it for later, but EXP-002a needs it this week and the
+  implementation is 15 lines. The Phase 5 exercise (`ex05`) still owns
+  the *derivation* — we just brought the code forward.
+- **Provisional N = 200 for Phase 1–4, N = 500 for Phase 5.** Justified
+  by Wilson half-width table in `docs/benchmark-protocol.md`; may
+  tighten once `ex05` sample-size analysis lands. Amendment policy is
+  documented in the protocol itself so future changes stay traceable.
+- **Match seed = agent seed** (paired seeds). Diagonalizes cross-agent
+  comparisons on shared environment realizations for paired bootstrap
+  variance reduction. Written into the protocol.
+
+**Pending (still Phase 1):**
+
+- Author runs `pytest tests/` and `ruff check .`.
+- Author runs `python scripts/local_ladder.py --agent-a heuristic --agent-b random --matches 200 --seed-start 1`, back-fills EXP-002a Actual column.
+- If Wilson lo > 0.5: bundle heuristic, upload to Kaggle, back-fill row #2 of `docs/submission-log.md`, tag `v0.2-baselines`.
+- If Wilson lo ≤ 0.5: iterate on the heuristic (log the failure below)
+  before submitting.
+
+## Failed Attempts
+
+_(filled if any come up during Phase 1.)_
