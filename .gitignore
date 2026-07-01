@@ -1,0 +1,87 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+pip-wheel-metadata/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+
+# Linters / type-checkers
+.ruff_cache/
+.mypy_cache/
+.pyre/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project-specific: heavy raw match logs and figure regen artifacts
+results/*.jsonl
+results/*.parquet
+!results/.gitkeep
+figures/*.png
+figures/*.pdf
+!figures/.gitkeep
+
+# Kaggle / competition SDK caches
+.kaggle/
+*.kaggle_credentials
+
+# Local secrets
+.env
+.env.local
+
+# Kaggle reference PDFs (large; redownloadable from the competition page)
+data/kaggle/cards/pdf/
+
+# Author-private planning docs (public repo shows artifacts, not the flight plan)
+roadmap-ptcgabc-ismcts-v2.md
+NOTES.md
+NOTES-*.md
+TODO.md
+TODO-*.md
+scratch/
+
+# Locally-built Kaggle submission bundles
+submission*.tar.gz
+
+# Runtime / debug logs
+*.log
+
+# Editor + OS backups
+*.bak
+*.orig
+*~
+*.code-workspace

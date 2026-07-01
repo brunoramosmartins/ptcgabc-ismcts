@@ -1,0 +1,22 @@
+# Runtime dependencies for the PTCG ABC ISMCTS agent.
+# Pinned lightly at this stage — Phase 0 scaffold. Tighten versions as the
+# environment stabilizes in Phase 1.
+
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+statsmodels>=0.14
+matplotlib>=3.8
+seaborn>=0.13
+
+# Competition SDK
+# Overview references 1.14.10 but that version is not on PyPI (list skips from 1.14.9
+# to 1.14.11 — presumably yanked). Using 1.14.11 as the closest stable release.
+kaggle-environments==1.14.11
+# The cabt engine (imported as `cg.api`) is expected to ship inside the
+# kaggle-environments package. Confirm locally with:
+#   python -c "from cg.api import Observation, to_observation_class"
+
+# Dev / test tooling
+pytest>=8.0
+ruff>=0.5
