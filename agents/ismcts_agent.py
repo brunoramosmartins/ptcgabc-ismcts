@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 from agents.base import Agent
 
 
 class ISMCTSAgent(Agent):
-    def choose(self, obs: Any) -> list[int]:
+    def choose(self, obs: dict) -> list[int]:
         raise NotImplementedError("Implement in Phase 3.")

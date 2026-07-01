@@ -4,27 +4,46 @@ Architecture, testing, CI, and reproducibility notes. Companion to `docs/researc
 
 ## Competition SDK
 
-The simulator engine is called **`cabt`** (per the Simulation Category overview: "Battles are run on the cabt Engine"). API docs live at **<https://matsuoinstitute.github.io/cabt/>**.
+The simulator engine is called **`cabt`** (per the Simulation Category overview: "Battles are run on the cabt Engine"). API docs live at **<https://matsuoinstitute.github.io/cabt/>** — no install instructions there, but the API structure is documented.
 
-The engine name and the Python import namespace are not the same — the Kaggle-provided template imports from `cg.api`:
+The `cabt` **environment** is registered inside the `kaggle-environments` package at `kaggle_environments/envs/cabt/`. It ships with a `cg/` subpackage that provides the native engine (`.so`/`.dll`/`.dylib` + Python wrappers in `cg/game.py` and `cg/sim.py`).
+
+**Version note:** The Simulation Category overview says "as of kaggle-environments 1.14.10", but the `cabt` env was **not** actually shipped at that version — 1.14.11 (the closest available on PyPI) does not contain a `cabt` folder. Use the latest release (>= 1.30) which does bundle it.
+
+### The `cg.api` wrapper is gone — the API is now plain dicts
+
+The Kaggle-provided `data/kaggle/sample_submission/main.py` opens with:
 
 ```python
 from cg.api import Observation, to_observation_class
 ```
 
-Same pattern as `scikit-learn` (pip) → `import sklearn`. The pip install spec is still to be confirmed by inspecting the Kaggle Docker image (see below). Track this in Phase 0 alongside Issue #1.
+**That import no longer exists.** The `cg/__init__.py` in kaggle-environments 1.30.2 is empty; there is no `api` submodule. The sample was written for an earlier SDK snapshot that had a wrapper class, and the sample has not been updated.
 
-The overview references `kaggle-environments == 1.14.10`, but that version is not on PyPI (release list jumps from 1.14.9 to 1.14.11 — presumably yanked). We pin **`1.14.11`** as the closest stable release. See <https://github.com/Kaggle/kaggle-environments> for the reference implementation.
+The **current** API is dict indexing, as used by the reference agents inside `kaggle_environments/envs/cabt/cabt.py`:
+
+```python
+def random_agent(obs: dict) -> list[int]:
+    if obs["select"] is None:
+        return deck  # 60 card IDs, the deck submission
+    return random.sample(
+        list(range(len(obs["select"]["option"]))),
+        obs["select"]["maxCount"],
+    )
+```
+
+We follow the dict form throughout our code. The `data/kaggle/sample_submission/` files are kept as historical reference only — do not treat them as canonical.
 
 ## Agent Interface
 
-The Kaggle entry point is a top-level `agent(obs_dict: dict) -> list[int]` function, not a class method. Conventions:
+The Kaggle entry point is a top-level `agent(obs_dict: dict) -> list[int]` function, not a class method. Conventions (all dict-indexed):
 
-- The observation exposes public game state, a log, and a list of legal options.
-- On the very first call `obs.select is None` — the agent returns the 60 card IDs of its deck (the initial "deck submission").
-- On subsequent calls the agent returns a list of integer indices into `obs.select.option`.
-- The returned list length is in `[obs.select.minCount, obs.select.maxCount]`, no duplicates.
+- On the very first call `obs["select"] is None` — the agent returns the 60 card IDs of its deck (the initial "deck submission").
+- On subsequent calls the agent returns a list of integer indices into `obs["select"]["option"]`.
+- The returned list length is in `[obs["select"]["minCount"], obs["select"]["maxCount"]]`, no duplicates.
 - The engine only ever presents legal options — no need to filter.
+
+The observation also carries `obs["logs"]` (game log) and `obs["current"]` (turn context, including `yourIndex` and `result`).
 
 Our internal `agents/` classes wrap this contract so search / heuristic / random logic can be swapped without touching the Kaggle-facing shim.
 
@@ -59,21 +78,43 @@ Upload under the "My Submissions" tab. Runtime constraints:
 
 ## Local Development
 
-The "Docker Image" link on the Simulation overview points to the **generic** [`kaggle-environments` Dockerfile](https://github.com/Kaggle/kaggle-environments/blob/master/docker/Dockerfile) — the same image used by every Kaggle env, not something PTCG-specific. It tells us:
+### Recommended: WSL2 + Python 3.11 venv
 
-- Base image: `gcr.io/kaggle-images/python:v163`
-- Node.js 22 available
-- `kaggle-environments` installed from source via `uv pip install --system .`
+Python 3.11 with a normal virtualenv is enough for local iteration. **Docker is not required** for Phase 0–3.
 
-The engine `cg`/`cabt` is **not visible in the Dockerfile** — it is either bundled as an env plugin inside `kaggle-environments` 1.14.10 or auto-installed at first invocation. To confirm locally:
+### Install recipe (avoiding the `vec_noise` trap)
+
+`kaggle-environments` declares `vec_noise==1.1.4` as a hard dependency. That package (last released 2019, unmaintained) has a `setup.py` that uses the Python 2 `__builtins__.__NUMPY_SETUP__` pattern, which raises `AttributeError` on any `setuptools >= 60`. The bug is in `vec_noise`'s own source, not in our toolchain — no combination of pip/uv/setuptools flags fixes it.
+
+`vec_noise` is only used by the Halite env (procedural ocean generation). PTCG (`cabt`) does not touch it. Skip it by installing `kaggle-environments` without dependency resolution, and then adding back only the deps `cabt` actually needs:
 
 ```bash
-pip install kaggle-environments==1.14.11
-python -c "from kaggle_environments import make; env = make('ptcg-ai-battle'); print(type(env))"
-python -c "from cg.api import Observation, to_observation_class; print('cg.api OK')"
+# Fresh venv:
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
+
+# Our project deps (kaggle-environments not listed here on purpose):
+pip install -r requirements.txt
+
+# Kaggle SDK, no deps (skips the broken vec_noise):
+pip install --no-deps kaggle-environments
+
+# Runtime deps that the cabt env actually needs:
+pip install requests flask jsonschema
+
+# Verify PTCG env is registered:
+python -c "from kaggle_environments import make; env = make('cabt'); print(type(env))"
 ```
 
-If both `make(...)` and `from cg.api import ...` succeed, we're set — no separate SDK install is needed. Otherwise, cross-check with <https://matsuoinstitute.github.io/cabt/> for the actual install path.
+**Note on the env name:** The make key is `cabt` (matching the engine and the folder name inside `kaggle_environments/envs/`), **not** `ptcg-ai-battle` (that's the Kaggle competition URL slug).
+
+**On `cg.api`:** Don't `import cg.api` — it doesn't exist in 1.30.2. The sample submission Kaggle provides uses that import but it's a stale template. Use the dict API instead (see "Agent Interface" above).
+
+### Wrong-package trap: `pip install cg`
+
+There is an unrelated package `cg` on PyPI (a clinical genomics tool) that pulls in 50+ heavy deps (SQLAlchemy, cryptography, Flask-Admin, PyMySQL, etc.). **Do not `pip install cg`.** The right `cg` is bundled with `kaggle-environments`.
+
+If your venv was polluted by an accidental `pip install cg`, the cleanest fix is a fresh venv rather than trying to unpin the ~50 unrelated packages.
 
 ## Rules ↔ Simulator Differences
 
