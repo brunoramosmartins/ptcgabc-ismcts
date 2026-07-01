@@ -13,4 +13,4 @@ Fill in `Actual rating` once the rating stabilizes (usually a few days after upl
 
 | # | Date | Git tag | Commit | Agent variant | Deck version | Key params | Active? | Validation | Expected effect | Actual rating |
 |---|---|---|---|---|---|---|---|---|---|---|
-| _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ |
+| 1 | _pending upload_ | v0.1-setup | _pending_ | RandomAgent (top-level `main.py` shim, uniform over `obs["select"]["option"]`) | Phase 0 placeholder (`decks/selected/deck.csv`, copy of Kaggle sample) | RNG unseeded on worker | _pending_ | _pending_ | Establishes the ladder floor and validates the bundle → Validation Episode → rating pipeline (EXP-001). No prior on the exact rating; expected in the µ₀ = 600 neighborhood. | _pending_ |
