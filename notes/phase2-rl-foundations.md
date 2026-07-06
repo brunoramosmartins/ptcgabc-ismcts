@@ -18,6 +18,34 @@ publishable form.
 Living document during Phase 2; ends with `## Lessons Learned` and
 `## Failed Attempts` at merge time.
 
+## Complementary reading (non-canonical)
+
+*AI Engineering from Scratch* (aiengineeringfromscratch.com) —
+Phase 09 covers RL from a practitioner's angle. Treats the same
+material as S&B but with more code-first framing and modern-LLM
+context (RLHF, GRPO). Useful as a second pass or a sanity check on
+S&B's more formal treatment; **not authoritative**, and the site's
+own conventions (Build-Use-Ship, "skill files", MDP-refuse checklists)
+are opinionated and do not map onto this project's structure. Use the
+lessons and exercises; ignore the framing overlay.
+
+Specific lessons cross-referenced in this file:
+- Phase 09 · 01 — MDPs, States, Actions & Rewards → coding exercises
+  adapted in [`../notebooks/phase2-gridworld-mdp.py`](../notebooks/phase2-gridworld-mdp.py).
+
+## Pending exercises (do not lose track)
+
+- [ ] **`notebooks/phase2-gridworld-mdp.py`** — fill in the three
+  GridWorld exercises (Easy: 10k rollouts and gap-to-optimal; Medium:
+  `policy_evaluation` with $\gamma \in \{0.5, 0.9, 0.99\}$; Hard:
+  stochastic-slip variant and comparison). Wrap up with the
+  PTCG-vs-GridWorld comparison table at the end of the notebook.
+  ~1h of code + ~30min of reflection.
+- [ ] **X.1 and X.2 cross-chapter connections below** — still empty.
+  Fill in after finishing the notebook.
+- [ ] **`## Lessons Learned` and `## Failed Attempts`** at the end of
+  this file — populate at merge time.
+
 ---
 
 ## Ch 1 — Introduction

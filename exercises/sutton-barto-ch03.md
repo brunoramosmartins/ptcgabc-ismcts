@@ -15,6 +15,13 @@ $r(s, a)$ is the two-argument expected reward, $v_\pi$ and $q_\pi$ are the
 state- and action-value functions under policy $\pi$, and $v_*, q_*, \pi_*$
 are the optimal counterparts.
 
+**Code reinforcement.** The GridWorld notebook at
+[`../notebooks/phase2-gridworld-mdp.py`](../notebooks/phase2-gridworld-mdp.py)
+implements numerical Bellman evaluation on a 4×4 deterministic and
+slippery grid; it materializes §3.14 (numerical Bellman check) and §3.24
+(optimal gridworld value) in code with heatmaps for $\gamma \in \{0.5,
+0.9, 0.99\}$.
+
 ---
 
 ## Exercise 3.1
