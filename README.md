@@ -29,8 +29,8 @@ Kaggle submissions so far:
 
 | # | Agent | Tag | Public score | Notes |
 |---|---|---|---|---|
-| 1 | RandomAgent | `v0.1-setup` | 373.7 | Ladder floor. |
-| 2 | HeuristicAgent (first-`maxCount` selector) | `v0.2-baselines` | pending stabilization | Beats random locally at 0.755 win rate (Wilson 95% CI [0.691, 0.809], N = 200). |
+| 1 | RandomAgent | `v0.1-setup` | 364.6 | Ladder floor (stabilized after ~4 days). |
+| 2 | HeuristicAgent (first-`maxCount` selector) | `v0.2-baselines` | 527.9 | +163.3 above random on the ladder. Beats random locally at 0.755 win rate (Wilson 95% CI [0.691, 0.809], N = 200). |
 
 ## Approach
 

@@ -1404,7 +1404,34 @@ of expected updates.
 - Ex 8.6 asks about skewed distributions. Does the answer strengthen or
   weaken the case for MCTS in PTCG?
 
-_(pending — see notes to author below.)_
+Exercise 8.6 asks what happens to the sample-vs-expected trade-off when
+the $b$ possible successor states are highly skewed instead of uniformly
+distributed. The answer **strengthens** the case for sample updates —
+and therefore strengthens the case for MCTS in PTCG.
+
+An expected update evaluates every successor state, weighting each by
+its transition probability. When the distribution is nearly uniform, no
+single evaluation dominates the total, so the expected update is not
+particularly wasteful. When the distribution is highly skewed, however,
+the expected update still spends the same computation on every
+successor, including the rare-outcome tail whose contribution to the
+value estimate is proportional to a tiny probability.
+
+Sample updates naturally exploit skew: they draw successor states in
+proportion to their transition probabilities. The high-probability
+outcomes are sampled many times and drive the estimate; the low-
+probability outcomes are sampled almost never, contributing negligibly.
+The computation therefore concentrates where the mass is, matching the
+structure of the underlying distribution without any extra bookkeeping.
+
+This directly favors MCTS on PTCG. Card draws, coin flips, and Trainer
+effects produce transition distributions that are anything but uniform
+— a small number of typical draw sequences (or heads/tails on a coin
+flip) dominate the transition mass, while the combinatorial tail of
+exotic sequences carries almost no probability weight. Expected updates
+would waste computation traversing that tail; sample updates ignore it
+proportionally. This is a second, orthogonal reason to prefer
+sample-based planning here, on top of the raw branching-factor argument.
 
 **My take.**
 
