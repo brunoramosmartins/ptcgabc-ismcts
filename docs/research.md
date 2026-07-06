@@ -18,3 +18,17 @@
 ## Methodology
 
 See `docs/benchmark-protocol.md` for the fixed match-set, seed, and hardware protocol every hypothesis test respects. See `experiments/registry.md` for the full experiment ledger.
+
+## Exploratory extensions (not pre-registered)
+
+Ideas that surfaced during study but are **not** part of the H1–H4
+lock. Candidates for Phase 5 exploratory experiments or
+post-competition portfolio extensions. See
+[`../notes/open-ideas.md`](../notes/open-ideas.md) for the full
+schema and rationale per idea.
+
+- **informed-determinization** — replace uniform $P(h \mid I)$ with a
+  distribution informed by public evidence (deck lists, discard,
+  board state). Candidate Phase 5 exploratory or post-competition
+  amendment. See [`../notes/open-ideas.md`](../notes/open-ideas.md)
+  under *informed-determinization*.
