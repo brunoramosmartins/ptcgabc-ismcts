@@ -35,16 +35,26 @@ Specific lessons cross-referenced in this file:
 
 ## Pending exercises (do not lose track)
 
+Reading:
+- [ ] **Browne et al. (2012) survey** → answer prompts in
+  [`phase2-mcts-fundamentals.md`](phase2-mcts-fundamentals.md).
+- [ ] **Cowling et al. (2012) ISMCTS paper** → answer prompts in
+  [`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md).
+- [ ] *(optional)* Long, Sturtevant, Buro & Furtak (2010) — no
+  companion note file; jot findings directly in the ISMCTS notes §6.2.
+
+Code / hands-on:
 - [ ] **`notebooks/phase2-gridworld-mdp.py`** — fill in the three
   GridWorld exercises (Easy: 10k rollouts and gap-to-optimal; Medium:
   `policy_evaluation` with $\gamma \in \{0.5, 0.9, 0.99\}$; Hard:
   stochastic-slip variant and comparison). Wrap up with the
   PTCG-vs-GridWorld comparison table at the end of the notebook.
   ~1h of code + ~30min of reflection.
+
+Fill-ins in this file:
 - [ ] **X.1 and X.2 cross-chapter connections below** — still empty.
-  Fill in after finishing the notebook.
-- [ ] **`## Lessons Learned` and `## Failed Attempts`** at the end of
-  this file — populate at merge time.
+- [ ] **`## Lessons Learned` and `## Failed Attempts`** — populate at
+  merge time.
 
 ---
 
