@@ -196,14 +196,34 @@ Repeating this process allows the search tree to concentrate
 computational effort on increasingly promising regions of the state
 space.
 
-> **Reviewer's note (Claude).** The current answer is a good overview
-> of the whole four-phase loop but does not directly address the
-> tree-policy vs default-policy distinction the prompt asks about. When
-> you revisit, focus on: (i) does S&B use "tree policy" and "default
-> policy" as separate terms? (ii) why is separating them useful — what
-> concretely breaks if a single UCB1 policy is used both inside the
-> tree and past the leaf? The current answer implicitly assumes they
-> differ but never says so explicitly.
+Browne makes the *tree policy* / *default policy* distinction explicit:
+the tree policy governs Selection inside the built tree (typically
+UCB1/UCT, which requires statistics — visit counts and $Q$-estimates —
+at every node it visits); the default policy is what runs during
+Simulation, from the newly expanded leaf to the terminal state, in
+territory the tree has not yet built. Sutton & Barto §8.11 does not
+name the two separately: they present MCTS as a single "tree policy
+plus rollouts" pattern and treat the rollout policy as an implicit
+choice.
+
+Separating the two is useful because they have different requirements.
+The tree policy is *statistics-driven*: it needs $Q(a)$ and $n_a$ per
+child, and it can afford the arithmetic because it only runs on nodes
+that already exist. The default policy is *stateless-cheap*: it runs on
+states that were never touched before, so it cannot rely on stored
+statistics — it must be fast enough that the overall sim rate stays
+high. If you used UCB1 as the default policy, every state visited
+during rollout would need its own statistics table; the search would
+grow the tree during rollout, blur the boundary between exploration
+and evaluation, and lose the anytime property that comes from cheap
+rollouts. The separation is what makes MCTS both principled inside the
+tree and cheap outside it.
+
+For our project, this maps cleanly onto ADR-001 and ADR-003: UCB1 as
+tree policy, random rollouts as default policy in Phase 3 (H1
+baseline), heuristic-guided rollouts as default policy in Phase 4
+(target of H2). The distinction between "what runs inside the tree" and
+"what runs outside" is exactly the axis along which H2 pivots.
 
 ---
 
@@ -221,16 +241,63 @@ second visit, etc.).
 
 **My take.**
 
-_(pending — the current draft in this slot was actually about UCT /
-selection, not expansion. Moved to §3.1 as material to build on.
-When you refill this prompt, focus specifically on the expansion
-policies enumerated in the survey: expand-one-child-per-iteration,
-expand-all-children-at-once, expand-only-on-second-visit, and the
-trade-offs between them.)_
+Browne enumerates three main expansion strategies:
+
+- **Expand one child per iteration** (the canonical UCT form from
+  Kocsis & Szepesvári and Coulom). When Selection reaches a leaf, a
+  single new child is added to the tree; the rest of the leaf's
+  siblings remain unexpanded and are considered in future iterations.
+- **Expand all children on first visit.** As soon as a node is
+  selected, every legal action becomes a child of the tree
+  immediately. Guarantees that every action gets at least one
+  simulation before any is prioritized.
+- **Delayed expansion / expand only after $k$ visits.** A node stays
+  a leaf until it has been selected $k$ times, at which point one or
+  more children are created. Trades initial exploration breadth for
+  memory savings on rarely-visited branches.
+
+Browne's default recommendation is the first: expand one child per
+iteration. This is what UCT uses in the paper's canonical algorithm
+and what most implementations ship with. The argument is that expanding
+lazily lets UCB1's selection statistics decide which subtrees deserve
+memory, rather than committing memory upfront to actions the search
+never revisits.
+
+For PTCG's high-branching-factor setting, expand-all-children is
+particularly wasteful. At a mid-game turn with dozens of legal actions
+(playable Trainers, energy attachments, retreats, attack choices), the
+first-visit expansion creates dozens of children whose statistics never
+progress beyond a single simulation. The paper's argument here is
+structurally identical to S&B Ch 8 §8.6's sample-vs-expected-update
+analysis (see
+[`phase2-rl-foundations.md`](phase2-rl-foundations.md) §8.3): committing
+computation to every possible successor regardless of its probability
+of mattering is exactly the failure mode sample updates avoid.
+Expand-one-per-iteration is the tree analog of a sample update; the
+UCB1 statistics on which children to expand act as the "sample" that
+directs computation only where value has been observed.
+
+Delayed expansion is worth considering for the deep, rarely-visited
+branches PTCG will have (endgame states after 25+ turns of divergent
+play). But at Phase 3 baseline, the canonical one-per-iteration is
+what ADR-001 implicitly assumes and what the Cowling paper's ISMCTS
+description inherits.
 
 **Refined write-up.**
 
-_(pending)_
+Browne recommends *expand one child per iteration* as the default
+expansion policy, matching the canonical UCT algorithm. Alternative
+strategies — expanding all children on first visit, or delaying
+expansion until a node has been selected $k$ times — trade breadth for
+memory in different regimes. In a high-branching-factor domain like
+Pokémon TCG, expand-all-children would allocate memory and initial
+simulations to every legal action at a decision point, even though
+UCB1's selection statistics will quickly identify most of them as
+irrelevant. This wastes simulation budget on options that will never
+be revisited, in direct analogy with the sample-vs-expected-update
+trade-off from S&B Ch 8 §8.6: expand-one-per-iteration is the tree
+analog of a sample update, letting UCB1 statistics decide where to
+grow the tree instead of committing memory upfront.
 
 ---
 
@@ -280,15 +347,65 @@ effectiveness of MCTS depends strongly on the quality of its rollout
 policy, which is why many modern implementations replace purely random
 simulations with heuristic or learned policies.
 
-> **Reviewer's note (Claude).** The prompt has three sub-questions and
-> the current answer covers the general "simulations matter" story but
-> not the specifics. When you revisit, aim to answer: (i) how does the
-> survey define "uniformly random"? (ii) what's the paper's "light vs
-> heavy rollout" trade-off argument? (iii) **most important for us**:
-> where does the survey say heuristic rollouts *hurt*? This is the
-> passage that pre-registers H2 (heuristic vs random rollouts) in a
-> non-trivial way — H2 is defensible precisely because the survey
-> acknowledges the outcome could go either direction.
+Browne distinguishes *light* rollouts (uniformly random or
+near-random action selection, no domain knowledge, extremely cheap per
+step) from *heavy* rollouts (rollouts using heuristics, pattern
+databases, small evaluation functions, or learned policies). A
+uniformly random rollout picks each legal action with equal
+probability. The survey notes that this is sufficient — sometimes
+surprisingly so — when random play produces enough terminal signal for
+the Backpropagation step to distinguish good actions from bad. The
+famous case is Go on the $19 \times 19$ board: even fully random
+rollouts produce enough win/loss variation that MCTS with random
+default policy became competitive against the best hand-crafted
+programs of its era.
+
+Where does the survey say heavy rollouts can *hurt*? Browne §3.4
+identifies three failure regimes:
+
+1. **Systematic bias in the heuristic.** A rollout policy that
+   consistently prefers one class of moves will overestimate the value
+   of positions where that class of moves is legal, even when the
+   underlying position is worse than the heuristic suggests. The tree
+   inherits this bias throughout the search.
+2. **Slower simulations reduce the total sim count.** Under a fixed
+   time budget, a heavier rollout policy that runs, say, 10× slower
+   per step must beat the light policy's estimate by enough to make up
+   for having 10× fewer simulations. If the variance reduction from
+   the heavy policy is smaller than that factor, MCTS with the light
+   policy wins overall.
+3. **Over-determinism in the rollout distribution.** Heavier
+   heuristics tend to concentrate probability on a small set of
+   "reasonable" actions. This narrows the exploration and can miss
+   nonstandard winning lines that the random policy would occasionally
+   discover. Empirically, some domains punish this — the heavy policy
+   never plays the surprise-win variation.
+
+These three regimes are why H2 in our project is a legitimate
+pre-registered hypothesis. If heuristic-guided rollouts *had* to beat
+random rollouts as a matter of algorithm design, H2 would be a
+foregone conclusion and not worth pre-registering. The survey's own
+argument is that H2 could go either way depending on how the
+heuristic's bias, cost, and determinism trade off against the variance
+reduction it provides. That's the shape of a real empirical question.
+
+**Refined write-up.**
+
+Rollouts are the mechanism by which MCTS turns simulated experience
+into value estimates. Browne distinguishes between light rollouts —
+typically uniformly random over legal actions, extremely cheap per
+step — and heavy rollouts, which use domain knowledge to bias action
+selection toward more realistic play. Light rollouts are surprisingly
+effective in domains where random terminal outcomes still carry
+enough signal, as demonstrated in early MCTS work on Go. Heavy
+rollouts reduce variance and produce more realistic terminal
+distributions, but the survey identifies three regimes in which they
+degrade performance: systematic bias inherited from the heuristic,
+reduced total simulation count under a fixed time budget, and
+over-concentration of the rollout distribution that misses
+nonstandard winning lines. This last point is what makes H2 in our
+project an honest empirical question: the direction of the effect
+cannot be determined from algorithm design alone.
 
 ---
 
@@ -331,15 +448,65 @@ statistical evidence that guides future exploration. As a result, each
 simulation improves the quality of subsequent decisions by making the
 search tree progressively more informative.
 
-> **Reviewer's note (Claude).** The general treatment is good. The
-> prompt has two specific sub-questions still open: (i) does the survey
-> cover weighted backup variants (depth-decaying, importance-sampled)?
-> and (ii) does it discuss backprop under imperfect-info? Both matter
-> for Phase 3 architectural choices — the first informs whether we
-> should use anything fancier than the sample-average $\alpha = 1/n$
-> update we derived in
-> [`phase2-rl-foundations.md`](phase2-rl-foundations.md) §2.2; the
-> second is where Cowling picks up the story.
+The default backup is the simple running average with
+$\alpha = 1/n$ — the same sample-average update derived in
+[`phase2-rl-foundations.md`](phase2-rl-foundations.md) §2.2. Browne
+surveys several weighted variants:
+
+- **Depth-weighted / discounted backup.** Multiply the propagated
+  reward by $\gamma^d$ where $d$ is the depth of the visited node
+  below the leaf. Used when actions closer to the terminal outcome
+  should be credited more strongly than actions many turns earlier.
+  For our project this doesn't apply cleanly because ADR-004 uses
+  $\gamma = 1$ terminal-only rewards, but it's worth knowing the
+  option exists.
+- **Importance-sampled backup.** Correct for the mismatch between the
+  tree policy's action distribution and the default policy's action
+  distribution. In principle removes some bias from heavy rollouts;
+  in practice rarely used because the correction factors are
+  high-variance and often undo the variance reduction the heavy
+  rollout was supposed to buy.
+- **Best-child backup / MaxMCTS variants.** Instead of updating with
+  the mean over rollouts, use the maximum observed value.
+  Occasionally used in adversarial games with alpha-beta-like
+  intuition, but Browne notes it loses UCT's asymptotic-consistency
+  guarantees.
+
+Browne's recommendation for a general default is the plain
+sample-average update; the weighted variants are domain-specific
+optimizations to consider only after the baseline is running.
+
+On imperfect information, Browne §7 acknowledges that determinization-
+based approaches face a specific backpropagation question: when a
+rollout is played out on a sampled determinization $h$, should its
+terminal reward update statistics at the *state* nodes it visited (as
+in perfect-info MCTS) or at the *information-set* nodes those states
+belong to? The survey identifies this as an open design choice and
+defers to the ISMCTS literature — Cowling et al. (2012) is exactly
+where the "update at information-set nodes" convention gets locked in.
+
+For our Phase 3 architecture: ADR-001 commits us to plain
+sample-average backup at information-set nodes (per Cowling), and
+ADR-004 commits us to terminal-only $r_T \in \{-1, 0, +1\}$ rewards.
+Together these rule out most of the weighted-backup surface; the
+default is the right choice for us.
+
+**Refined write-up.**
+
+Backpropagation transforms individual simulation outcomes into
+accumulated tree statistics. Browne surveys weighted backup variants —
+depth-discounted, importance-sampled, and best-child — but recommends
+the plain sample-average update ($\alpha = 1/n$) as the default,
+citing UCT's asymptotic-consistency guarantees. The weighted variants
+are domain-specific optimizations to consider only after a baseline
+implementation is running. On imperfect-information games, Browne
+identifies a specific design question — should backpropagation update
+state nodes or information-set nodes? — and defers to the ISMCTS
+literature, where Cowling et al. (2012) commit to updating at
+information-set nodes as the algorithmic definition of ISMCTS. Our
+project's ADR-001 and ADR-004 together fix these choices: plain
+sample-average backup, terminal-only rewards, updates at
+information-set nodes.
 
 ---
 
@@ -360,15 +527,75 @@ doesn't change over time.
 
 **My take.**
 
-_(pending — an earlier draft in this slot was about backpropagation
-and has been moved to §2.4. Also, there was a partial UCT/selection
-discussion in §2.2 that's better developed here. When you fill this
-prompt, focus on the nested-bandit non-stationarity story specifically,
-building on the intuition from `phase2-rl-foundations.md` §2.5.)_
+UCT applies UCB1 not at a single bandit but at every internal node of
+the search tree, where the "arms" are the child nodes. This nesting
+introduces a subtle problem: UCB1's regret bound and its concentration
+guarantees were proven for a *stationary* bandit — the true expected
+reward per arm doesn't change over time. In a nested tree bandit, the
+true expected reward of choosing a subtree *does* change over time,
+because deeper parts of the subtree get more visits and their value
+estimates sharpen. What looked like a mediocre subtree after 10
+simulations may look substantially better after 1000, purely because
+its own internal statistics converged.
+
+Browne acknowledges this issue explicitly and cites Kocsis &
+Szepesvári (2006) for the asymptotic-consistency result that makes
+UCT work despite the non-stationarity. The theorem shows that under
+mild conditions — bounded rewards (which our $\{-1, 0, +1\}$ reward
+satisfies trivially), a properly scaled exploration constant, and
+infinite-visitation of every arm — the failure probability of
+selecting a sub-optimal action at the root decays super-polynomially
+in the number of simulations $N$. Intuitively: for any finite $N$
+there is a chance of picking the wrong root action, but that chance
+shrinks faster than any polynomial in $N$, so the argmax converges to
+the correct action in the limit. The full proof reduces the
+non-stationary tree bandit to a sequence of eventually-stationary
+bandits, exploiting the fact that once a subtree's value estimate
+stabilizes, its parent node's bandit becomes effectively stationary.
+
+On the exploration constant $c$: the theoretical value from the
+Chernoff–Hoeffding derivation (see
+[`phase2-rl-foundations.md`](phase2-rl-foundations.md) §2.4) is
+$c = \sqrt{2}$, but Browne notes that this is rarely used unchanged in
+practice. Two adjustments are common:
+
+- **Reward range.** If terminal rewards are on a scale other than
+  $[0, 1]$, $c$ should be rescaled proportionally. For our $\{-1, 0,
+  +1\}$ reward, the effective range is $[-1, +1]$ or width 2, so $c$
+  effectively doubles compared to the $[0, 1]$ case. Practical
+  implementations often absorb this into a tuned $c$ per domain.
+- **Domain-specific tuning.** Higher $c$ encourages more exploration
+  and is preferred when rollouts are high-variance (heavy stochastic
+  effects, deep games). Lower $c$ concentrates on exploitation and
+  is preferred when rollouts are stable and the tree policy is
+  trusted. Empirical Go MCTS work often uses $c$ in the range
+  $[0.5, 1.0]$, well below the theoretical $\sqrt{2} \approx 1.41$.
+
+For our project, ADR-001 leaves $c$ as a hyperparameter to sweep in
+Phase 4 (per the roadmap's `exp_sensitivity_c.py`). The Chernoff–
+Hoeffding value $c = \sqrt{2}$ is the natural anchor for that sweep,
+with the range $[0.5, 2.0]$ covering the practical regime.
 
 **Refined write-up.**
 
-_(pending)_
+UCT applies UCB1 recursively at every internal node of the search
+tree, treating each node as a bandit over its children. This creates
+a non-stationary bandit environment: the true value of each subtree
+changes as its own internal estimates sharpen. UCB1's stationary
+regret bound therefore does not apply directly. Browne cites the
+Kocsis & Szepesvári (2006) asymptotic-consistency result, which shows
+that under bounded rewards, appropriate exploration constant, and
+infinite-visitation, the failure probability of selecting a
+suboptimal root action decays super-polynomially in the number of
+simulations. The proof reduces the non-stationary tree bandit to a
+sequence of eventually-stationary bandits, exploiting the fact that
+sub-tree estimates stabilize before their parents' selection
+decisions do. The exploration constant $c$ has a theoretical value of
+$\sqrt{2}$ from the Chernoff–Hoeffding derivation but is commonly
+tuned per domain, with lower values ($\approx 0.5$–$1.0$) favored
+in low-variance rollout regimes and higher values reserved for
+domains with heavy stochasticity. Our project defers the choice of
+$c$ to the Phase 4 sensitivity sweep specified in the roadmap.
 
 ---
 
@@ -387,14 +614,76 @@ search runs for a finite budget.
 
 **My take.**
 
-_(pending — an earlier draft in this slot was about RAVE and has been
-moved to §4.2, where the RAVE prompt lives. When you fill this prompt,
-focus on empirical convergence rate, which nodes stabilize first, and
-what that implies for our sims-per-decision budget.)_
+Kocsis & Szepesvári's asymptotic-consistency guarantee applies as
+$N \to \infty$. In practice, the search runs on a per-decision budget
+measured in seconds or milliseconds, so the operational question is
+not "does UCT converge?" but "does it converge fast enough?".
+
+Browne discusses the practical convergence rate qualitatively:
+
+- **Root children with well-separated true values converge fastest.**
+  This follows directly from the bandit regret theorem — a suboptimal
+  arm is pulled $O(\log N / \Delta^2)$ times, where $\Delta$ is the
+  gap between its value and the optimal arm's. When gaps are large,
+  UCB1 identifies the best arm quickly; when gaps are small, many
+  simulations are needed to distinguish.
+- **Deep nodes converge slower than shallow ones.** A deep node's
+  value estimate depends on its own subtree's convergence, which
+  depends on *its* subtrees, and so on. This hierarchical dependency
+  means the tree converges root-first and deep-last. Root children
+  can stabilize after a few hundred simulations even when the deepest
+  nodes have very few visits.
+- **Nodes with high branching factor need more visits per unit of
+  convergence,** because UCB1's exploration term forces every child
+  to be visited at least once before any is prioritized. A node with
+  50 children needs at least 50 simulations before UCB1 statistics
+  are even defined for all of them, and roughly $30 \times 50 = 1500$
+  simulations before each has ~30 visits — a common rule-of-thumb
+  visit threshold for treating the argmax as reliable.
+
+For our project, connecting these to the branching-factor estimates
+in [`../exercises/ex02_mcts_derivations.md`](../exercises/ex02_mcts_derivations.md)
+Ex 02.5: mid-game PTCG branching is estimated at $b \in [10, 50]$.
+Under the $k = 30$ visits-per-arm rule, the root needs $30 \times b$
+= 300–1500 simulations before its argmax is trustworthy. Under the
+10-minute Kaggle match budget with roughly 30 decisions per match, we
+have ~20 seconds per decision. If each simulation takes 1–2 ms
+(random rollouts on a determinized PTCG state should be in that
+range, though we won't know until we measure), that's 10,000–20,000
+simulations per decision — comfortable margin over the lower bound
+for the root, but deeper nodes will remain underexplored. This is
+consistent with Browne's observation that "the search tree is deepest
+at the root and shallowest at the frontier"; UCT concentrates
+computation at the top and lets the frontier remain sparse.
+
+The implication for H3 (sensitivity to simulations/decision): we
+expect win rate to rise sharply with simulations up to roughly
+$k \cdot b$ at the root, then plateau as marginal gains from deeper
+convergence dominate. The pre-registered H3 test in Phase 5 should
+target this breakpoint specifically.
 
 **Refined write-up.**
 
-_(pending)_
+Kocsis & Szepesvári's asymptotic-consistency result is a limit
+statement; in practice MCTS runs on finite per-decision budgets, so
+the practical question is convergence rate. Browne argues that root
+children with well-separated true values converge fastest (bandit
+regret scales inversely with the value gap), while deep nodes remain
+underexplored because their convergence depends on hierarchically
+below-them subtrees converging first. Nodes with high branching
+factor need at least $k \cdot b$ simulations before each child has
+$k$ visits — a common rule-of-thumb threshold. For our project,
+combining Ex 02.5's estimate of mid-game branching $b \in [10, 50]$
+with $k = 30$ gives a lower bound of 300–1500 simulations per
+decision for the root argmax to be reliable. Under the 10-minute
+match budget with roughly 30 decisions per match and each simulation
+plausibly costing 1–2 ms, we should have 10,000–20,000 simulations
+per decision available — comfortable margin at the root, though
+deeper nodes will remain sparsely visited. H3 (Phase 5 sensitivity to
+simulations/decision) should target the breakpoint where root
+convergence saturates, since past that point marginal simulations
+contribute only to deeper nodes whose effect on the root argmax is
+already muted.
 
 ---
 
