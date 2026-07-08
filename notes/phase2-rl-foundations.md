@@ -40,10 +40,16 @@ Reading:
   [`phase2-mcts-fundamentals.md`](phase2-mcts-fundamentals.md).
 - [ ] **Cowling et al. (2012) ISMCTS paper** → answer prompts in
   [`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md).
-- [ ] *(optional)* Long, Sturtevant, Buro & Furtak (2010) — no
-  companion note file; jot findings directly in the ISMCTS notes §6.2.
-- [ ] Cross-source synthesis (comparisons across S&B, Browne, Cowling)
-  → answer prompts in
+- [ ] **Long, Sturtevant, Buro & Furtak (2010)** → answer prompts in
+  [`phase2-long-2010-notes.md`](phase2-long-2010-notes.md). Promoted
+  from "optional" after Cowling reading — the paper's cheating-oracle
+  methodology directly calibrates our
+  *oracle-baseline-cheating-uct* candidate idea, and its three
+  properties (leaf correlation, bias, disambiguation) let us
+  *predict* the size of $\Delta_{\text{ceiling}}$ for PTCG before
+  running the experiment.
+- [ ] Cross-source synthesis (comparisons across S&B, Browne, Cowling,
+  Long) → answer prompts in
   [`phase2-synthesis.md`](phase2-synthesis.md), *after* the individual
   readings are done.
 

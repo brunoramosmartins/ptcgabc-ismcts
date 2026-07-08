@@ -509,13 +509,19 @@ $\Delta_{\text{ceiling}}$ using the shared seeds.
 
 **Literature.**
 
-- **Long, Sturtevant, Buro & Furtak (2010).** Uses cheating PIMC
-  (Perfect-Information Monte Carlo with oracle access) as the
-  reference against which their non-cheating PIMC is measured. Same
-  methodological role.
-- **Cowling et al. (2012).** Their empirical section likely
-  uses this construction as a reference; confirm the exact framing
-  during a second-pass read of the paper.
+- **Long, Sturtevant, Buro & Furtak (2010).** Direct methodological
+  precedent — uses a cheating perfect-information search as the
+  reference against which non-cheating PIMC is measured, and
+  introduces the three properties (leaf correlation, bias,
+  disambiguation) that predict how large the gap will be. Reading
+  companion in
+  [`phase2-long-2010-notes.md`](phase2-long-2010-notes.md); §3.2 and
+  §4.2 of that file calibrate our decision thresholds against the
+  empirical ranges Long reports.
+- **Cowling et al. (2012).** The ISMCTS paper's experimental section
+  uses Cheating UCT as an oracle upper bound
+  ([`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md)
+  §5.1), directly validating this idea's methodology.
 - **Frank & Basin (1998).** Original strategy-fusion analysis
   measures imperfect-info methods against the perfect-information
   minimax solution — an oracle reference of the same shape.

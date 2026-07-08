@@ -1086,6 +1086,12 @@ approach that alleviates some of its most important weaknesses —
 especially Strategy Fusion — without claiming to eliminate every
 limitation associated with imperfect-information search.
 
+For a fuller treatment of the Long argument and its implications for
+where PTCG will land on the "PIMC works well vs badly" axis, see
+[`phase2-long-2010-notes.md`](phase2-long-2010-notes.md), which
+covers the three properties (leaf correlation, bias, disambiguation)
+Long uses to predict PIMC's effectiveness.
+
 ---
 
 ## Synthesis prompts — moved
