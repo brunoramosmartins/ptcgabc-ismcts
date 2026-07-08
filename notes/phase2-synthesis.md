@@ -214,14 +214,33 @@ that motivates each individual EXP in Phases 3–5.
 ### Which pieces are candidate (in `open-ideas.md`)
 
 - **Belief State Generator** → *informed-determinization* (both
-  constraint refinement and archetype-based priors).
+  constraint refinement and archetype-based priors). **Gated on
+  `oracle-baseline-cheating-uct`** — measure the imperfect-information
+  ceiling before implementing the belief pipeline.
 - **Action Ranking + Progressive Widening** →
-  *progressive-widening-with-action-ranking*.
+  *progressive-widening-with-action-ranking*. Independent of the
+  belief-based line; can proceed regardless of the ceiling.
 - **Transposition Table (not shown in sketch)** →
-  *transposition-tables-for-info-sets*.
+  *transposition-tables-for-info-sets*. Pure speedup, not gated.
 - **RAVE with per-archetype conditioning (not shown in sketch, but a
   natural layer on top of Backpropagation)** →
-  *archetype-conditioned-rave*.
+  *archetype-conditioned-rave*. Transitively gated (depends on the
+  archetype module from *informed-determinization*).
+
+### The diagnostic that gates everything
+
+Before any of the Belief State Generator work, run
+*oracle-baseline-cheating-uct* to measure
+
+$$
+\Delta_{\text{ceiling}} \;=\; W_{\text{cheat}} - W_{\text{ISMCTS}}.
+$$
+
+The ceiling gap tells us how much headroom belief-based ideas have.
+Small gap → drop the belief pipeline entirely, focus Phase 5 on
+Progressive Widening and Transposition Tables (which don't depend on
+opponent modeling). Large gap → the target architecture above becomes
+worth implementing.
 
 ### What the sketch is missing
 

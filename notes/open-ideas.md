@@ -145,14 +145,23 @@ where the expectation is now over the informed distribution.
 
 **Where in the roadmap.**
 
+- **Prerequisite: `oracle-baseline-cheating-uct` (below).** Do not
+  implement this idea until the ceiling gap
+  $\Delta_{\text{ceiling}} = W_{\text{cheat}} - W_{\text{ISMCTS}}$
+  is measured. If $\Delta_{\text{ceiling}} \lesssim 5$ pp, the
+  imperfect-information penalty is small and belief refinement has
+  too little headroom to justify the implementation cost. Drop the
+  idea and revisit only if the reference opponent or deck changes.
+  If $\Delta_{\text{ceiling}} \gtrsim 15$ pp, proceed with confidence.
+  Middle range: ship option 1 (deterministic constraint refinement)
+  only.
 - **Not Phase 3** — Phase 3 tests H1 (ISMCTS random-rollout vs
   heuristic baseline). Adding informed sampling in Phase 3 would
   confound H1: any observed lift could come from ISMCTS itself *or*
   from the informed prior. Baseline must be vanilla ISMCTS.
-- **Phase 5 exploratory** is the natural home. Compare uniform vs
-  informed sampling on the same match set, report Wilson CI on the
-  win-rate delta (analogous to Phase 5's other exploratory sweeps for
-  $c$ and determinizations-per-decision).
+- **Phase 5 exploratory** is the natural home, gated on the oracle
+  baseline. Compare uniform vs informed sampling on the same match
+  set, report Wilson CI on the win-rate delta.
 - **Post-competition portfolio extension:** if the Phase 5
   experiment shows lift, this becomes an **amendment ADR** (proposed
   name: ADR-001a — informed sampling variant) and a candidate TIL
@@ -174,11 +183,20 @@ where the expectation is now over the informed distribution.
 - **Confounding risk:** the H1 pre-registered test must remain on
   uniform ISMCTS. Any code change must preserve a uniform baseline
   path for reproducibility.
+- **Headroom risk:** the ceiling gap measured by
+  *oracle-baseline-cheating-uct* caps the achievable lift. Even a
+  perfect belief update cannot outperform the oracle. If the
+  ceiling is close to vanilla ISMCTS, this idea is fundamentally
+  capped regardless of implementation quality — hence the
+  prerequisite above.
 
 **Status.**
 
 - **idea** — 2026-07 (Bruno raised during Phase 2 study; captured
   during Cowling reading).
+- **gated** — 2026-07 (Bruno added the *oracle-baseline-cheating-uct*
+  prerequisite after further Cowling reading; now blocked on
+  measuring $\Delta_{\text{ceiling}}$).
 
 ---
 
@@ -240,6 +258,12 @@ plausible archetypes weighted by the posterior.
 
 **Where in the roadmap.**
 
+- **Prerequisite (transitive): `oracle-baseline-cheating-uct`.** Since
+  archetype-conditioned RAVE inherits *informed-determinization*'s
+  archetype-inference module, and *informed-determinization* is
+  itself gated on the ceiling measurement, this idea is
+  transitively gated. If $\Delta_{\text{ceiling}}$ is small, drop
+  both.
 - **Not Phase 3, not Phase 4.** Depends on both (a) working ISMCTS
   (Phase 3) and (b) an archetype-inference module (which itself
   depends on `informed-determinization`). Both prerequisites must
@@ -422,6 +446,116 @@ reads $T$ for UCB1 scoring.
 **Status.**
 
 - **idea** — 2026-07 (Browne §4 enhancements reflection).
+
+---
+
+### oracle-baseline-cheating-uct — Upper-bound diagnostic: give UCT the true state
+
+**Motivation.**
+
+Before investing implementation effort in *informed-determinization*,
+*archetype-conditioned-rave*, or any other opponent-modeling technique,
+we need to know whether opponent-side information gain is even a
+promising axis. The clean way to test this is a *cheating* baseline:
+an agent that receives the full game state $s$ instead of the
+information set $I(s)$ and runs standard perfect-information UCT (no
+determinization, no belief modeling). Its win rate against a fixed
+reference opponent gives an *upper bound* on what any
+imperfect-information algorithm can achieve, because no algorithm
+without oracle access can outperform one with it, all else equal.
+
+The gap $\Delta_{\text{ceiling}} = W_{\text{cheat}} - W_{\text{ISMCTS}}$
+is exactly the headroom that informed determinization, archetype
+priors, and RAVE variants have to work with:
+
+- **Small gap (say $\lesssim$ 5 pp).** The imperfect-information penalty
+  is small; even a perfect belief update can only recover a few
+  points. Not worth 3–5 days per idea.
+- **Large gap (say $\gtrsim$ 15 pp).** There is real value to unlock;
+  proceed with informed-determinization in earnest.
+- **Medium gap.** Ship the cheap option first (informed-determinization
+  option 1 — deterministic constraint refinement, ~1 day) and gate
+  the more expensive options on its result.
+
+This is not a candidate for submission — cheating UCT violates the
+Kaggle rules by accessing opponent's private state. It's a
+*measurement instrument* that tells us where to spend engineering
+budget.
+
+**Formal statement.**
+
+Define two variants:
+
+- **Vanilla ISMCTS** (baseline, per ADR-001): observes $I(s)$, samples
+  $h \sim P(h \mid I)$ uniformly, runs the four-phase MCTS loop with
+  UCB1 at info-set nodes.
+- **Cheating UCT** (this idea): observes the true $s$ directly, runs
+  the four-phase MCTS loop on the true state — no determinization
+  layer, no info-set nodes, no sampling. Otherwise identical
+  (same UCB1 constant $c$, same rollout policy, same
+  simulations/decision budget).
+
+Both play against a fixed reference opponent (initially the heuristic
+baseline from EXP-002a) on a benchmark match set of $N = 200$ paired
+seeds per the benchmark protocol. Report:
+
+$$
+W_{\text{cheat}},\quad W_{\text{ISMCTS}},\quad \Delta_{\text{ceiling}}
+\;=\; W_{\text{cheat}} - W_{\text{ISMCTS}},
+$$
+
+each with Wilson 95% CI, plus a paired-bootstrap CI on
+$\Delta_{\text{ceiling}}$ using the shared seeds.
+
+**Literature.**
+
+- **Long, Sturtevant, Buro & Furtak (2010).** Uses cheating PIMC
+  (Perfect-Information Monte Carlo with oracle access) as the
+  reference against which their non-cheating PIMC is measured. Same
+  methodological role.
+- **Cowling et al. (2012).** Their empirical section likely
+  uses this construction as a reference; confirm the exact framing
+  during a second-pass read of the paper.
+- **Frank & Basin (1998).** Original strategy-fusion analysis
+  measures imperfect-info methods against the perfect-information
+  minimax solution — an oracle reference of the same shape.
+
+**Where in the roadmap.**
+
+- **Phase 3 addendum.** Requires working ISMCTS (Phase 3 Issue #19)
+  and the local ladder (Phase 1). No further dependencies. Fits
+  naturally as a new issue between H1 (Issue #21) and the ISMCTS
+  ladder submission (Issue #22), or immediately after Issue #22.
+- **Gates all downstream inference work.** The result determines
+  whether *informed-determinization*, *archetype-conditioned-rave*,
+  and any future belief-based idea are pursued in Phase 5.
+- **Cannot be a submission.** Cheating UCT violates competition rules;
+  it never leaves the local ladder.
+
+**Risk to scope.**
+
+- **Cost:** ~1 day. The implementation reuses the ISMCTS four-phase
+  loop; the only change is "skip determinization, use the true state".
+  Requires an env-level toggle to expose $s$ instead of $I(s)$ —
+  small addition to `env/wrapper.py`.
+- **Descope path:** none needed. This is the least risky idea in the
+  file precisely because it's diagnostic, not architectural.
+- **Interpretation risk:** the ceiling depends on the reference
+  opponent. Measuring against the heuristic baseline gives the ceiling
+  for beating the heuristic; measuring against another ISMCTS instance
+  gives a different (usually smaller) number. Pin the reference in
+  the registry entry and be consistent when interpreting downstream
+  experiments.
+- **Compliance risk:** cheating UCT must never be bundled and
+  uploaded to Kaggle. Enforce with a code-level assertion in
+  `scripts/submit.py` that rejects any main.py using the oracle
+  path (add a magic string check).
+
+**Status.**
+
+- **idea** — 2026-07 (raised after Cowling reading; direct
+  consequence of "measure headroom before optimizing" methodology
+  from Long et al. 2010).
 
 ---
 

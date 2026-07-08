@@ -27,8 +27,25 @@ post-competition portfolio extensions. See
 [`../notes/open-ideas.md`](../notes/open-ideas.md) for the full
 schema and rationale per idea.
 
+- **oracle-baseline-cheating-uct** — diagnostic upper bound: give UCT
+  the true state (no determinization) to measure the ceiling that any
+  imperfect-information algorithm can achieve. Gates every belief-
+  based idea below. Phase 3 addendum.
 - **informed-determinization** — replace uniform $P(h \mid I)$ with a
   distribution informed by public evidence (deck lists, discard,
-  board state). Candidate Phase 5 exploratory or post-competition
-  amendment. See [`../notes/open-ideas.md`](../notes/open-ideas.md)
-  under *informed-determinization*.
+  board state). Gated on the oracle baseline: pursue only if the
+  ceiling gap $\gtrsim$ 5 pp. Candidate Phase 5 exploratory or post-
+  competition amendment. See
+  [`../notes/open-ideas.md`](../notes/open-ideas.md) under
+  *informed-determinization*.
+- **archetype-conditioned-rave** — RAVE statistics conditioned on the
+  inferred opponent archetype. Transitively gated on the oracle
+  baseline (via *informed-determinization*'s archetype module). See
+  [`../notes/open-ideas.md`](../notes/open-ideas.md).
+- **progressive-widening-with-action-ranking** — heuristic action
+  ranking + progressive widening for the high-branching-factor
+  setting. Independent of the belief-based line. Phase 5 exploratory.
+  See [`../notes/open-ideas.md`](../notes/open-ideas.md).
+- **transposition-tables-for-info-sets** — hash-based sharing of
+  statistics across equivalent info-sets. Pure speedup, not a
+  research question. Phase 5 exploratory or post-competition.
