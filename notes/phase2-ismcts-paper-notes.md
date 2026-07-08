@@ -27,6 +27,12 @@ Cross-refs used throughout:
 
 Prompts marked 🔄 require synthesis with Browne or with earlier readings.
 
+**Cross-source questions** (which variant for PTCG, what Cowling leaves
+for the implementer, predictions vs reality) live in
+[`phase2-synthesis.md`](phase2-synthesis.md) — not at the end of this
+file. When a prompt here forward-refs a cross-source question, it
+points there.
+
 Living document during Phase 2; ends with `## Lessons Learned` and
 `## Failed Attempts` at merge time.
 
@@ -388,72 +394,14 @@ _(pending)_
 
 ---
 
-## Synthesis prompts (fill after finishing the paper)
+## Synthesis prompts — moved
 
-### S.1 — Which variant should we implement for PTCG? 🔄
-
-**Prompt.** The paper offers SO-ISMCTS, MO-ISMCTS, and possibly a third
-variant.
-
-- Restate the trade-off between the three variants for our specific
-  Kaggle constraints (10-min per-match budget, 2 vCPUs, no persistent
-  state).
-- Which does ADR-001 commit us to? Is the argument still valid after
-  reading the paper, or does the paper suggest a different choice?
-- If the paper's argument changes our mind, update ADR-001 with an
-  amendment ADR (per the amendment policy in the ADR itself).
-
-**My take.**
-
-_(fill in)_
-
-**Refined write-up.**
-
-_(pending)_
-
----
-
-### S.2 — What does the paper *not* prepare us for?
-
-**Prompt.** Before writing any ISMCTS code (Phase 3, Issue #16), enumerate
-what the paper leaves as an implementation exercise.
-
-- Data structures for the search tree — is the paper prescriptive or
-  does it leave this open?
-- The rollout policy — the paper likely assumes it's given. What
-  choices does that leave us? (Answer: random or heuristic, per Phase
-  3 vs Phase 4.)
-- Handling of chance nodes (coin flips, random card effects) —
-  explicit modeling vs implicit sampling through the engine.
-
-**My take.**
-
-_(fill in)_
-
-**Refined write-up.**
-
-_(pending)_
-
----
-
-### S.3 — Compare your prediction (from Browne §S.2) with reality
-
-**Prompt.** Go back to
-[`phase2-mcts-fundamentals.md`](phase2-mcts-fundamentals.md) §S.2 and
-look at what you predicted before reading Cowling.
-
-- Which predictions were right?
-- Which were wrong, and what surprised you?
-- What does this tell you about your own model of "what's hard about
-  imperfect-information games"?
-
-**My take.**
-
-_(fill in)_
-
-**Refined write-up.**
-
-_(pending)_
+Cross-source questions (which variant for PTCG, what Cowling leaves for
+the implementer, predictions vs reality) live in
+[`phase2-synthesis.md`](phase2-synthesis.md) as §CS.3, §CS.4, and §CS.5.
+They fill after this paper is finished; the cross-source file is where
+they belong so answers that pull from Browne, Cowling, and S&B stay in
+one place.
 
 ---
 

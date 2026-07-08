@@ -42,6 +42,10 @@ Reading:
   [`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md).
 - [ ] *(optional)* Long, Sturtevant, Buro & Furtak (2010) — no
   companion note file; jot findings directly in the ISMCTS notes §6.2.
+- [ ] Cross-source synthesis (comparisons across S&B, Browne, Cowling)
+  → answer prompts in
+  [`phase2-synthesis.md`](phase2-synthesis.md), *after* the individual
+  readings are done.
 
 Code / hands-on:
 - [ ] **`notebooks/phase2-gridworld-mdp.py`** — fill in the three

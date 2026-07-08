@@ -109,7 +109,13 @@ Two concrete construction paths:
    $\tilde I$ using a domain-specific model of deck-building
    likelihoods (e.g., "Charmander implies Charizard with high
    probability"). This introduces model-dependent bias but potentially
-   large variance reduction.
+   large variance reduction. A specific instantiation is
+   **archetype-based priors**: classify the opponent's deck into a
+   small set of known meta archetypes (e.g., Charizard-ex, Gardevoir,
+   Lost Box) using the first few turns' visible plays, then condition
+   $P(h \mid I)$ on the inferred archetype. This is much sharper than
+   a fully independent card-by-card belief and is the natural
+   companion to *archetype-conditioned-rave* below.
 
 The action-selection rule remains
 
@@ -173,6 +179,249 @@ where the expectation is now over the informed distribution.
 
 - **idea** — 2026-07 (Bruno raised during Phase 2 study; captured
   during Cowling reading).
+
+---
+
+### archetype-conditioned-rave — RAVE statistics conditioned on inferred opponent archetype
+
+**Motivation.**
+
+Standard RAVE (Rapid Action Value Estimation, per Browne §4.2) accelerates
+early-search estimates by sharing action statistics across nodes: an action
+$a$ that worked well in one rollout gets partial credit at every node
+$a$ was considered. This trades bias for variance and is known to hurt
+when the underlying "same action, different value" assumption breaks
+(Cowling §4.2 notes this failure mode for imperfect-info games).
+
+In PTCG, action semantics depend strongly on the **opponent's deck
+archetype**. `Boss's Orders` targeting a benched Charizard is a
+completely different action than the same card targeting a benched
+Comfey — the value of the action collapses to "did we KO the
+right target?" which depends on what the opponent is building toward.
+Global RAVE statistics across a search that mixes rollouts against a
+Charizard determinization and a Gardevoir determinization would average
+out signal.
+
+The proposal: keep RAVE, but **condition the statistics on the
+opponent's inferred archetype** (see `informed-determinization` above,
+archetype-based prior instantiation). Within an archetype bucket, RAVE's
+"same action similar value" assumption holds much better; across
+buckets, it doesn't. Buckets can start global and progressively
+disaggregate as archetype confidence rises during the match.
+
+**Formal statement.**
+
+Maintain per-archetype RAVE tables $Q_{\text{RAVE}}(a \mid \text{arch})$
+instead of a single global $Q_{\text{RAVE}}(a)$. The tree-policy scoring
+function at node $n$ with visit count $n_a$ and RAVE visit count
+$\tilde n_a$ becomes
+
+$$
+\text{score}(a) \;=\; \beta(\tilde n_a, n_a)\, Q_{\text{RAVE}}(a \mid \hat{\text{arch}}) \;+\; \bigl(1 - \beta(\tilde n_a, n_a)\bigr)\, Q(a) \;+\; c\sqrt{\frac{\ln t}{n_a}},
+$$
+
+where $\hat{\text{arch}}$ is the archetype MAP estimate at the current
+information set and $\beta$ is the standard RAVE decay (fully global
+early, fully MCTS-native late). When archetype confidence is low,
+$Q_{\text{RAVE}}(a \mid \hat{\text{arch}})$ can be a mixture across
+plausible archetypes weighted by the posterior.
+
+**Literature.**
+
+- **Gelly & Silver (2011).** *Monte-Carlo tree search and rapid action
+  value estimation in computer Go.* Canonical RAVE reference cited by
+  Browne §4.2. Discusses the RAVE assumption and its failure regimes.
+- **Browne et al. (2012)** §4.2 (RAVE) and §4.2 (MAST) — the survey's
+  own treatment.
+- **Cowling et al. (2012)** §4.2 or wherever RAVE is discussed in the
+  ISMCTS context — the survey acknowledges that RAVE-style techniques
+  need adaptation for imperfect information, but doesn't develop the
+  archetype-conditioning approach.
+
+**Where in the roadmap.**
+
+- **Not Phase 3, not Phase 4.** Depends on both (a) working ISMCTS
+  (Phase 3) and (b) an archetype-inference module (which itself
+  depends on `informed-determinization`). Both prerequisites must
+  be in place.
+- **Phase 5 exploratory or post-competition.** Naturally paired with
+  `informed-determinization` — the same archetype-inference module
+  serves both.
+- **Amendment ADR candidate:** if this lifts win rate on the ladder,
+  it's material for ADR-001b (RAVE variant) alongside the
+  ADR-001a informed-sampling variant.
+
+**Risk to scope.**
+
+- **Cost:** ~2–3 days on top of the informed-determinization work.
+  RAVE has a well-known implementation pattern; the delta from
+  standard RAVE to archetype-conditioned is one extra dictionary
+  lookup per update.
+- **Descope path:** ship plain (unconditioned) RAVE first as a Phase 5
+  exploratory. If that beats vanilla ISMCTS, adding the archetype
+  condition is the next iteration. If RAVE alone doesn't help, drop
+  both.
+- **Confounding risk:** RAVE and informed-determinization each move
+  win rate independently. Any comparison must use factorial design
+  (2×2: {uniform, informed} × {no RAVE, RAVE}) or the effects will
+  entangle.
+
+**Status.**
+
+- **idea** — 2026-07 (captured after Browne §4.2 reading; hybrid with
+  `informed-determinization`).
+
+---
+
+### progressive-widening-with-action-ranking — Rank actions before search, expand progressively
+
+**Motivation.**
+
+Browne §4 covers Progressive Widening (PW): control how quickly
+the tree fans out by allowing $\lceil c \cdot n^\alpha \rceil$ children
+at a node with $n$ visits, for tuned $c, \alpha$. In domains with
+large branching factors — hundreds of legal moves at some PTCG
+turns, once Trainers and abilities are counted — expanding all
+children immediately wastes simulations on obviously-weak actions.
+
+Standard PW picks the "next child to expand" in whatever order the
+engine emits actions. The proposal: **rank actions before search
+begins** using a cheap heuristic (attack damage, prize-value payoff,
+`Boss's Orders`-style disruption priority) and let PW expand them in
+rank order. The first few simulations then land on plausible actions
+by construction, before UCB1 has had a chance to converge.
+
+This is a specific and testable variant of the general "action
+prior" idea used implicitly by AlphaZero-family agents, but
+without needing a learned policy — the ranking is hand-crafted
+(same tier as our Phase 4 evaluator per ADR-003).
+
+**Formal statement.**
+
+At each internal node $n$ with visit count $v(n)$:
+
+1. Compute $r: A(s) \to \mathbb{R}$, a rank score per legal action,
+   using a fixed ranking function (subclass of ADR-003's evaluator).
+2. Sort actions by $r$ (descending).
+3. Allow at most $k(v) = \lceil c \cdot v^\alpha \rceil$ children,
+   choosing the top-$k$ in ranked order.
+4. UCB1 selection operates only over the expanded children.
+
+As $v \to \infty$, $k \to |A(s)|$ and the algorithm reduces to
+standard ISMCTS. For finite $v$, computation concentrates on
+top-ranked actions.
+
+**Literature.**
+
+- **Coulom (2007), *Efficient Selectivity...*** — original PW
+  paper. Browne §4 cites this.
+- **Browne et al. (2012)** §4 (Progressive Strategies).
+- **Chaslot et al. (2008), *Progressive Strategies for Monte-Carlo
+  Tree Search.*** Broader treatment of both PW and Progressive Bias.
+
+**Where in the roadmap.**
+
+- **Not Phase 3 baseline** — same reasoning as informed-determinization.
+- **Phase 5 exploratory** — testable independently of informed-
+  determinization, so cleaner factorial design. Report as a separate
+  EXP with its own registry row.
+- **Interacts with ADR-003 evaluator** — the ranking function reuses
+  the Phase 4 evaluator features. If the evaluator is good, ranking
+  is good.
+
+**Risk to scope.**
+
+- **Cost:** ~1 day if we reuse the Phase 4 evaluator as the ranking
+  function. Independent of informed-determinization implementation.
+- **Descope path:** if PW alone lifts win rate, ship as an amendment
+  ADR (ADR-002-search-widening). If not, closed as "no lift".
+- **Interaction risk with H4:** the ranking uses the evaluator, so
+  ablating an evaluator feature could break the ranking. Any PW
+  experiment must run after H4 ablation is complete, or the ranking
+  must be pinned during H4.
+
+**Status.**
+
+- **idea** — 2026-07 (Browne §4 reflection).
+
+---
+
+### transposition-tables-for-info-sets — Hash-based sharing across equivalent information sets
+
+**Motivation.**
+
+Browne §4 (enhancements) covers transposition tables: many search
+trees revisit the same underlying state via different action
+sequences; storing statistics keyed by state hash instead of by tree
+path lets those revisits share data.
+
+In imperfect-info games this is harder because two nodes are
+"equivalent" only if the information sets agree, and info-set
+equality depends on the full observation history (deck lists,
+discard, board, prize count, and any Trainer effects that shuffled
+either hand). Cowling §4 briefly discusses the difficulty.
+
+However, PTCG has a specific structure that makes a subset of
+transpositions cheap: **many turns produce identical observable
+outcomes via commuting sub-decisions**. If we play `Nest Ball` and
+then `Ultra Ball`, or `Ultra Ball` then `Nest Ball`, the resulting
+board and hand states are often identical. The tree normally treats
+these as distinct paths.
+
+The proposal: hash the *canonical observable state* (a normalized
+representation of $S^{\text{pub}} \cup H_i$ that ignores intra-turn
+action order) and share statistics across nodes with the same hash.
+Not all pairs of nodes are hash-equal — some Trainer effects do
+depend on order — but enough are that the savings are real.
+
+**Formal statement.**
+
+Define a canonicalizer $\text{canon}: S \to \mathbb{Z}$ that maps
+each state to a hash respecting:
+
+- Same info-set (observable) content → same hash.
+- Different observable content → different hash (up to collision).
+
+Maintain a global table $T: \mathbb{Z} \to (\text{visits}, Q)$. When
+selection or backpropagation touches node $n$ with state $s$, update
+$T[\text{canon}(s)]$ instead of a node-local statistic. Selection
+reads $T$ for UCB1 scoring.
+
+**Literature.**
+
+- **Browne et al. (2012)** §4 discusses transposition tables for
+  perfect-info MCTS.
+- **Cowling et al. (2012)** — briefly notes the imperfect-info
+  extension is harder; unclear whether they attempt it in the
+  empirical section.
+- **Childs, Brodeur & Kocsis (2008), *Transpositions and Move Groups
+  in MCTS*.** Broader analysis of when transpositions help vs hurt.
+
+**Where in the roadmap.**
+
+- **Phase 5 exploratory** — pure implementation optimization, not a
+  research question. Report as an EXP with a "simulations per second"
+  metric alongside win-rate.
+- **Post-competition:** if the speedup lets us push simulations-per-
+  decision materially higher within the 10-min budget, this becomes
+  a candidate ADR (ADR-004-transpositions).
+
+**Risk to scope.**
+
+- **Cost:** medium (~2–3 days). The canonicalizer is where the
+  difficulty lives. If designed poorly, incorrect hashes cause
+  incorrect sharing and silently break the search. Requires unit
+  tests on hand-crafted state pairs.
+- **Descope path:** ship a very conservative canonicalizer (identity
+  hash — only exact copies transpose) as a working baseline, then
+  progressively relax equivalence classes.
+- **Correctness risk:** unlike the other ideas, this one can silently
+  corrupt statistics. Requires extra test coverage and possibly a
+  "transpositions off" mode for debugging.
+
+**Status.**
+
+- **idea** — 2026-07 (Browne §4 enhancements reflection).
 
 ---
 
