@@ -52,6 +52,17 @@ Use **Information-Set Monte Carlo Tree Search (ISMCTS)** — specifically the
 Choosing $a$ at the root:
 $$a^{*} = \arg\max_{a} \; \mathbb{E}_{h \sim P(h \mid I)}\!\left[Q(I, a, h)\right].$$
 
+**Variant rationale (clarified after the Phase 2 readings).** The
+single-observer choice is not merely timeline-friendly — it matches
+the problem formulation. The agent's objective is to optimize the
+decision from *its own* information set; a single tree rooted there
+concentrates the entire simulation budget on exactly that quantity.
+The richer variants (SO-ISMCTS+POM, MO-ISMCTS) model opponent belief
+updates and are treated as empirical extensions to be justified by
+experiments, not assumed a priori — see
+`notes/phase2-synthesis.md` §CS.3 and the staged-complexity philosophy
+from Long et al. (2010).
+
 ## Consequences
 
 **Positive.**
