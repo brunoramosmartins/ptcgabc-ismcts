@@ -45,13 +45,90 @@ class DeterminizationError(RuntimeError):
     """Raised when the visible-card accounting does not close."""
 
 
-def _walk_cards(node: Any, out: list[tuple[int, int]]) -> None:
-    """Collect (card_id, player_index) for every card-like dict."""
+# The observation can hide up to this many of our/their cards in
+# unidentifiable "limbo": our own face-down active during setup, and a
+# Trainer card mid-resolution (removed from hand, not yet discarded,
+# exposed nowhere — pilot v3 census). When the hidden pool exceeds the
+# engine's requirement by at most this slack, we sample `need` cards
+# uniformly from the pool: the true hidden set is a subset of the
+# pool, so most determinizations are fully consistent and the rest
+# carry a single-card inconsistency the engine tolerates.
+POOL_SLACK = 2
+
+_BASIC_IDS_CACHE: set[int] | None = None
+
+
+def basic_pokemon_ids() -> set[int]:
+    """Card ids that may legally sit in the active slot (Basic Pokémon).
+
+    Loaded once from the engine's card database. The enemy_active
+    segment of a determinization must be a Basic — sampling an Energy
+    or Trainer there produces an invalid state the engine rejects
+    (SearchBegin error 2, pilot v3 hypothesis).
+
+    Raises:
+        RuntimeError: If the database schema doesn't match any known
+            key layout — the message embeds a sample entry so the
+            detection can be extended in one line.
+    """
+    global _BASIC_IDS_CACHE
+    if _BASIC_IDS_CACHE is not None:
+        return _BASIC_IDS_CACHE
+
+    import json
+
+    from env.search_engine import all_card
+
+    cards = all_card()
+    if not isinstance(cards, list) or not cards:
+        raise RuntimeError(f"AllCard returned unexpected payload: {type(cards)}")
+
+    def is_basic(entry: dict) -> bool | None:
+        """True/False when determinable; None when schema is unknown."""
+        # Pokémon check + stage-0 check across plausible key layouts.
+        for stage_key in ("stage", "evolveStage", "evolutionStage", "grade"):
+            if stage_key in entry:
+                stage = entry[stage_key]
+                # hp > 0 distinguishes Pokémon from Trainers/Energy when
+                # no explicit category key exists.
+                hp = entry.get("hp") or entry.get("maxHp") or 0
+                return stage == 0 and hp > 0
+        if "evolvesFrom" in entry or "preEvolution" in entry:
+            pre = entry.get("evolvesFrom") or entry.get("preEvolution")
+            hp = entry.get("hp") or entry.get("maxHp") or 0
+            return not pre and hp > 0
+        return None
+
+    ids: set[int] = set()
+    undetectable = True
+    for entry in cards:
+        if not isinstance(entry, dict):
+            continue
+        verdict = is_basic(entry)
+        if verdict is None:
+            continue
+        undetectable = False
+        if verdict:
+            cid = entry.get("cardId", entry.get("id"))
+            if isinstance(cid, int):
+                ids.add(cid)
+    if undetectable or not ids:
+        sample = json.dumps(cards[0])[:400]
+        raise RuntimeError(
+            "could not detect Basic Pokémon in the card database; "
+            f"first entry: {sample}"
+        )
+    _BASIC_IDS_CACHE = ids
+    return ids
+
+
+def _walk_cards(node: Any, out: list[tuple[int, int, Any]]) -> None:
+    """Collect (card_id, player_index, serial) for every card-like dict."""
     if isinstance(node, dict):
         card_id = node.get("id")
         owner = node.get("playerIndex")
         if isinstance(card_id, int) and isinstance(owner, int):
-            out.append((card_id, owner))
+            out.append((card_id, owner, node.get("serial")))
         for value in node.values():
             _walk_cards(value, out)
     elif isinstance(node, list):
@@ -62,19 +139,74 @@ def _walk_cards(node: Any, out: list[tuple[int, int]]) -> None:
 def visible_cards(obs: dict) -> tuple[Counter, Counter]:
     """Multisets of visible card ids for (our player, opponent).
 
-    Walks the whole ``current`` state recursively, so hands, discards,
-    boards, attached energies/tools, pre-evolutions, stadium, and any
-    revealed zones are all swept uniformly. Face-down cards carry no
-    integer id and are skipped automatically.
+    Walks ``current`` plus exactly one field of ``select``:
+    ``contextCard`` — the card being resolved right now (e.g. a
+    Trainer played from hand), which sits in no board zone and would
+    otherwise leave the hidden pool one card too large.
+
+    ``select.deck`` is deliberately NOT swept: cards shown by a
+    deck-search effect are still counted in ``deckCount``, so sweeping
+    them double-counts the deck (pilot v2 signature:
+    "pool has 6, visible=54"). Face-down cards carry no integer id and
+    are skipped automatically.
+
+    Cards are deduplicated by their unique ``serial``: the same
+    physical card can appear both on the board and as the select's
+    context reference, and must be counted once. Entries without a
+    serial are counted as-is.
     """
     me = obs["current"]["yourIndex"]
-    found: list[tuple[int, int]] = []
+    found: list[tuple[int, int, Any]] = []
     _walk_cards(obs["current"], found)
+    _walk_cards((obs.get("select") or {}).get("contextCard"), found)
     mine: Counter = Counter()
     theirs: Counter = Counter()
-    for card_id, owner in found:
+    seen_serials: set = set()
+    for card_id, owner, serial in found:
+        if serial is not None:
+            if serial in seen_serials:
+                continue
+            seen_serials.add(serial)
         (mine if owner == me else theirs)[card_id] += 1
     return mine, theirs
+
+
+def _zone_census(obs: dict) -> str:
+    """Compact per-zone census embedded in accounting errors.
+
+    Turns every DeterminizationError into a self-diagnosing report:
+    the zone whose count disagrees with the sweep is visible directly
+    in the message, no reproduction needed.
+    """
+    cur = obs["current"]
+    me = cur["yourIndex"]
+    sel = obs.get("select") or {}
+
+    def player_zones(p: dict) -> str:
+        active = p.get("active") or []
+        active_repr = [a.get("id") if isinstance(a, dict) else a for a in active]
+        hand = p.get("hand") or []
+        return (
+            f"hand={len(hand)}/{p.get('handCount')} "
+            f"deckCount={p.get('deckCount')} "
+            f"prize={len(p.get('prize') or [])} "
+            f"discard={len(p.get('discard') or [])} "
+            f"active={active_repr} "
+            f"bench={len(p.get('bench') or [])}"
+        )
+
+    ctx = sel.get("contextCard")
+    ctx_repr = ctx.get("id") if isinstance(ctx, dict) else ctx
+    looking = cur.get("looking")
+    return (
+        f"me[{player_zones(cur['players'][me])}] "
+        f"opp[{player_zones(cur['players'][1 - me])}] "
+        f"stadium={len(cur.get('stadium') or [])} "
+        f"looking={len(looking) if looking else 0} "
+        f"select.type={sel.get('type')} select.contextCard={ctx_repr} "
+        f"select.deck={len(sel.get('deck') or []) if sel.get('deck') else 0} "
+        f"turn={cur.get('turn')}"
+    )
 
 
 def _hidden_pool(
@@ -90,12 +222,27 @@ def _hidden_pool(
     return list(pool.elements())
 
 
+def _draw(pool: list[int], need: int, label: str, obs: dict,
+          rng: random.Random) -> list[int]:
+    """Shuffle and take `need` cards from the pool, tolerating up to
+    POOL_SLACK unidentifiable limbo cards; fail loud beyond that."""
+    excess = len(pool) - need
+    if excess < 0 or excess > POOL_SLACK:
+        raise DeterminizationError(
+            f"{label}: hidden pool has {len(pool)} cards, engine needs "
+            f"{need} (slack {POOL_SLACK}) | census: {_zone_census(obs)}"
+        )
+    rng.shuffle(pool)
+    return pool[:need]
+
+
 def sample_determinization(
     obs: dict,
     my_deck_list: list[int],
     opponent_deck_list: list[int] | None,
     rng: random.Random,
     filler_card: int | None = None,
+    basic_ids: set[int] | None = None,
 ) -> dict[str, list[int]]:
     """Sample a hidden assignment consistent with the observation.
 
@@ -107,55 +254,70 @@ def sample_determinization(
         rng: Seeded RNG (benchmark-protocol pairing).
         filler_card: Card id used for the opponent's hidden zones when
             their list is unknown. Ignored when the list is given.
+        basic_ids: Card ids legal in the active slot. ``None`` loads
+            the engine card database lazily (`basic_pokemon_ids`).
+            Only consulted when the opponent's active is unrevealed.
 
     Returns:
         Keyword arguments for `env.search_engine.search_begin`.
 
     Raises:
-        DeterminizationError: If the card accounting does not close.
+        DeterminizationError: If the card accounting does not close
+            within ``POOL_SLACK``, or no Basic is available for an
+            unrevealed enemy active.
     """
     want = expected_counts(obs)
     vis_mine, vis_theirs = visible_cards(obs)
 
-    # --- our side: hidden pool = deck + prizes -------------------------
+    # --- our side: hidden pool = deck + prizes (+ limbo slack) ---------
     pool = _hidden_pool(my_deck_list, vis_mine, "my side")
     need = want["my_deck"] + want["my_prize"]
-    if len(pool) != need:
-        raise DeterminizationError(
-            f"my side: hidden pool has {len(pool)} cards, engine needs "
-            f"{need} (deck {want['my_deck']} + prize {want['my_prize']}); "
-            f"visible={sum(vis_mine.values())}"
-        )
-    rng.shuffle(pool)
-    my_deck = pool[: want["my_deck"]]
-    my_prize = pool[want["my_deck"]:]
+    drawn = _draw(pool, need, "my side", obs, rng)
+    my_deck = drawn[: want["my_deck"]]
+    my_prize = drawn[want["my_deck"]:]
 
     # --- opponent side: deck + prizes + hand + hidden active -----------
     need_opp = (want["enemy_deck"] + want["enemy_prize"]
                 + want["enemy_hand"] + want["enemy_active"])
     if opponent_deck_list is not None:
         pool_opp = _hidden_pool(opponent_deck_list, vis_theirs, "opponent")
-        if len(pool_opp) != need_opp:
-            raise DeterminizationError(
-                f"opponent: hidden pool has {len(pool_opp)} cards, engine "
-                f"needs {need_opp}; visible={sum(vis_theirs.values())}"
-            )
-        rng.shuffle(pool_opp)
+
+        # The unrevealed active must be a Basic Pokémon — an Energy or
+        # Trainer there is an invalid state the engine rejects
+        # (SearchBegin error 2). Pick actives first, from the Basics
+        # in the pool, then draw the rest.
+        enemy_active: list[int] = []
+        if want["enemy_active"] > 0:
+            if basic_ids is None:
+                basic_ids = basic_pokemon_ids()
+            basics_in_pool = [c for c in pool_opp if c in basic_ids]
+            if len(basics_in_pool) < want["enemy_active"]:
+                raise DeterminizationError(
+                    f"opponent: need {want['enemy_active']} Basic(s) for "
+                    f"the unrevealed active but pool has "
+                    f"{len(basics_in_pool)} | census: {_zone_census(obs)}"
+                )
+            enemy_active = rng.sample(basics_in_pool, want["enemy_active"])
+            for card in enemy_active:
+                pool_opp.remove(card)
+
+        rest_need = need_opp - want["enemy_active"]
+        drawn_opp = _draw(pool_opp, rest_need, "opponent", obs, rng)
     else:
         if filler_card is None:
             raise DeterminizationError(
                 "opponent deck list unknown and no filler_card given"
             )
-        pool_opp = [filler_card] * need_opp
+        enemy_active = [filler_card] * want["enemy_active"]
+        drawn_opp = [filler_card] * (need_opp - want["enemy_active"])
 
     a = want["enemy_deck"]
     b = a + want["enemy_prize"]
-    c = b + want["enemy_hand"]
     return {
         "my_deck": my_deck,
         "my_prize": my_prize,
-        "enemy_deck": pool_opp[:a],
-        "enemy_prize": pool_opp[a:b],
-        "enemy_hand": pool_opp[b:c],
-        "enemy_active": pool_opp[c:],
+        "enemy_deck": drawn_opp[:a],
+        "enemy_prize": drawn_opp[a:b],
+        "enemy_hand": drawn_opp[b:],
+        "enemy_active": enemy_active,
     }
