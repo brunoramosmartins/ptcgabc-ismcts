@@ -122,6 +122,9 @@ The overview flags that "there are a few differences between the official Pokém
 
 ## Architecture
 
+Operational step-by-step map (which function runs when, with sequence
+diagrams): [`ismcts-walkthrough.md`](ismcts-walkthrough.md).
+
 - `env/` — adapter over `cg.api`; exposes observations and legal actions.
 - `agents/` — dispatch layer + variants (random, heuristic, ISMCTS).
 - `search/` — MCTS four-phase loop with information-set-aware nodes.

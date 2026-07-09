@@ -33,7 +33,11 @@ import tempfile
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_MAIN = REPO_ROOT / "main.py"
 DEFAULT_DECK = REPO_ROOT / "decks" / "selected" / "deck.csv"
-DEFAULT_OUT = REPO_ROOT / "submission.tar.gz"
+# Built bundles are artifacts, not source: they land in build/ (already
+# gitignored), keeping the repo root clean. Kaggle's "top level"
+# requirement applies to the files INSIDE the archive, not to where the
+# archive itself lives.
+DEFAULT_OUT = REPO_ROOT / "build" / "submission.tar.gz"
 
 BUNDLE_MAX_BYTES = 197 * 1024 * 1024 + int(0.7 * 1024 * 1024)
 
