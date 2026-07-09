@@ -1,25 +1,28 @@
-"""Local round-robin runner for internal baselines (Phase 1+).
+"""Local head-to-head runner for internal baselines (Phase 1+).
 
-Pits two agents against each other for N matches on paired seeds, records
-one row per match, and reports the win rate with a Wilson 95% CI. Used to
-gate the "heuristic beats random by a CI-separated margin" Phase 1
-Definition of Done and to smoke-test any future agent before Kaggle
-upload.
+Pits two agents against each other for N matches on paired seeds,
+records one row per match, and reports the win rate with a Wilson 95%
+CI. Used to gate Phase 1's "heuristic beats random" DoD (EXP-002a) and
+Phase 3's H1 test (EXP-003, ISMCTS vs heuristic).
 
 The runner respects `docs/benchmark-protocol.md`:
 
 - Match seed and agent seed are pinned together (paired matches).
 - Deterministic agents (HeuristicAgent) receive the seed but ignore it.
 - Wilson CI is computed via `stats.wilson.wilson_interval`.
+- ISMCTS fallback events (unsearchable decisions, see
+  `agents/ismcts_agent.py`) are counted per match and summarized —
+  a validity flag for any EXP that uses the ismcts arm.
 
-Example:
+Example (EXP-003 configuration):
 
     python scripts/local_ladder.py \\
-        --agent-a heuristic \\
-        --agent-b random \\
-        --matches 200 \\
+        --agent-a ismcts \\
+        --agent-b heuristic \\
+        --matches 500 \\
         --seed-start 1 \\
-        --out results/heuristic_vs_random.jsonl
+        --iterations 1000 \\
+        --out results/exp003_ismcts_vs_heuristic.jsonl
 
 The script imports `kaggle_environments` lazily so that unit tests can
 run without the SDK installed.
@@ -40,25 +43,38 @@ if str(REPO_ROOT) not in sys.path:
 
 from agents.base import Agent  # noqa: E402
 from agents.heuristic_agent import HeuristicAgent  # noqa: E402
+from agents.ismcts_agent import ISMCTSAgent  # noqa: E402
 from agents.random_agent import RandomAgent  # noqa: E402
 from stats.wilson import wilson_interval  # noqa: E402
 
+# Builder contract: (seed, deck, iterations) -> Agent. Deterministic
+# agents ignore what they don't need.
+AgentBuilder = Callable[[int, list[int], int], Agent]
 
-AgentFactory = Callable[[int], Agent]
 
-
-def _random_factory(seed: int) -> Agent:
+def _random_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    del deck, iterations
     return RandomAgent(rng=random.Random(seed))
 
 
-def _heuristic_factory(seed: int) -> Agent:
-    del seed  # deterministic; parameter kept for a uniform factory signature
+def _heuristic_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    del seed, deck, iterations  # deterministic; uniform builder signature
     return HeuristicAgent()
 
 
-AGENT_REGISTRY: dict[str, AgentFactory] = {
-    "random": _random_factory,
-    "heuristic": _heuristic_factory,
+def _ismcts_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    return ISMCTSAgent(
+        my_deck_list=deck,
+        opponent_deck_list=deck,   # mirror matches: the list is known
+        iterations=iterations,
+        rng=random.Random(seed),
+    )
+
+
+AGENT_REGISTRY: dict[str, AgentBuilder] = {
+    "random": _random_builder,
+    "heuristic": _heuristic_builder,
+    "ismcts": _ismcts_builder,
 }
 
 
@@ -79,22 +95,20 @@ def _wrap_for_cabt(agent: Agent, deck: list[int]) -> Callable[[dict], list[int]]
 
 
 def run_match(
-    factory_a: AgentFactory,
-    factory_b: AgentFactory,
+    builder_a: AgentBuilder,
+    builder_b: AgentBuilder,
     deck: list[int],
     seed: int,
+    iterations: int,
 ) -> dict:
-    """Play one match; return {seed, reward_a, reward_b, outcome_for_a}.
-
-    outcome_for_a ∈ {-1, 0, +1} follows sign of (reward_a - reward_b).
-    """
+    """Play one match; returns per-match row including fallback counts."""
     from kaggle_environments import make
 
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
-    agent_a = _wrap_for_cabt(factory_a(seed), deck)
-    agent_b = _wrap_for_cabt(factory_b(seed), deck)
+    agent_a = builder_a(seed, deck, iterations)
+    agent_b = builder_b(seed, deck, iterations)
 
-    env.run([agent_a, agent_b])
+    env.run([_wrap_for_cabt(agent_a, deck), _wrap_for_cabt(agent_b, deck)])
 
     reward_a = env.state[0]["reward"]
     reward_b = env.state[1]["reward"]
@@ -103,6 +117,8 @@ def run_match(
         "reward_a": reward_a,
         "reward_b": reward_b,
         "outcome_for_a": _sign(reward_a - reward_b),
+        "fallbacks_a": len(getattr(agent_a, "fallback_events", [])),
+        "fallbacks_b": len(getattr(agent_b, "fallback_events", [])),
     }
 
 
@@ -130,6 +146,12 @@ def summarize(rows: Iterable[dict]) -> dict:
         "win_rate": p_hat,
         "wilson_lo": lo,
         "wilson_hi": hi,
+        "fallbacks_a_total": sum(r.get("fallbacks_a", 0) for r in rows),
+        "fallbacks_b_total": sum(r.get("fallbacks_b", 0) for r in rows),
+        "matches_with_fallbacks": sum(
+            1 for r in rows
+            if r.get("fallbacks_a", 0) or r.get("fallbacks_b", 0)
+        ),
     }
 
 
@@ -142,6 +164,9 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--agent-b", required=True, choices=sorted(AGENT_REGISTRY))
     p.add_argument("--matches", type=int, default=200)
     p.add_argument("--seed-start", type=int, default=1)
+    p.add_argument("--iterations", type=int, default=1000,
+                   help="ISMCTS iterations per decision (ignored by "
+                        "random/heuristic).")
     p.add_argument(
         "--deck",
         type=pathlib.Path,
@@ -159,25 +184,41 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
     deck = _load_deck(args.deck)
-    factory_a = AGENT_REGISTRY[args.agent_a]
-    factory_b = AGENT_REGISTRY[args.agent_b]
+    builder_a = AGENT_REGISTRY[args.agent_a]
+    builder_b = AGENT_REGISTRY[args.agent_b]
 
     rows: list[dict] = []
-    for offset in range(args.matches):
-        seed = args.seed_start + offset
-        row = run_match(factory_a, factory_b, deck, seed)
-        row["agent_a"] = args.agent_a
-        row["agent_b"] = args.agent_b
-        rows.append(row)
-
+    out_file = None
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        with args.out.open("w") as f:
-            for row in rows:
-                f.write(json.dumps(row) + "\n")
+        out_file = args.out.open("w")
+    try:
+        for offset in range(args.matches):
+            seed = args.seed_start + offset
+            row = run_match(builder_a, builder_b, deck, seed, args.iterations)
+            row["agent_a"] = args.agent_a
+            row["agent_b"] = args.agent_b
+            rows.append(row)
+            if out_file is not None:
+                out_file.write(json.dumps(row) + "\n")
+                out_file.flush()
+            if (offset + 1) % 25 == 0:
+                s = summarize(rows)
+                print(f"[{offset + 1}/{args.matches}] "
+                      f"win_rate={s['win_rate']:.3f} "
+                      f"wilson=[{s['wilson_lo']:.3f}, {s['wilson_hi']:.3f}] "
+                      f"fallback_matches={s['matches_with_fallbacks']}",
+                      flush=True)
+    finally:
+        if out_file is not None:
+            out_file.close()
 
     summary = summarize(rows)
-    print(json.dumps({"agent_a": args.agent_a, "agent_b": args.agent_b, **summary}, indent=2))
+    print(json.dumps(
+        {"agent_a": args.agent_a, "agent_b": args.agent_b,
+         "iterations": args.iterations, **summary},
+        indent=2,
+    ))
     return 0
 
 

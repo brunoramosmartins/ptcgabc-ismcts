@@ -89,3 +89,9 @@ submission*.tar.gz
 
 # Claude Code — local-only agent config (project + personal)
 .claude/
+
+# Vendored competition SDK (cg-lib from the Kaggle dataset).
+# Competition-provided code: used locally for development, never
+# republished in this repo, never bundled (the submission runtime
+# already ships cg.api). Fetch instructions in docs/engineering.md.
+vendor/

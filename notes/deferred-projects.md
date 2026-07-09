@@ -78,6 +78,32 @@ slots now.
 
 ---
 
+## Homebrew card-game engine behind the same search interface
+
+Surfaced while studying the cabt engine's API (Phase 3). The engine
+itself is **Competition-Use-Only licensed** and cannot be modified or
+reused for other games — but its *interface design* is an idea, and
+ideas are free to reimplement:
+
+- `battle_start / select / battle_finish` — the match loop;
+- `search_begin(observation_blob, caller-supplied hidden state) →
+  search_step → search_end` — the determinized-simulation hook that
+  makes ISMCTS a thin client.
+
+The plan: define a small Python protocol (`BattleEngine`) capturing
+exactly the surface our `search/` stack consumes, refactor our ISMCTS
+code against the protocol, then implement a **from-scratch engine for
+a simpler original card game** (own rules, no Pokémon IP) behind the
+same protocol. Everything we built — determinizer, node/UCB, four-phase
+loop, local ladder, stats — ports over with zero changes; only the
+engine is new.
+
+Value: proves the stack is engine-agnostic (portfolio claim), gives a
+legally clean playground for the belief-modeling ideas that the
+competition timeline may not accommodate, and is the natural home for
+the checkers/Connect-4 artifacts above if they graduate from
+notebooks to engines. **After `v1.0.0` only.**
+
 ## Other deferred ideas (parking lot)
 
 - **Learned evaluator ablation** (ADR-003 alternative): retrain the

@@ -81,6 +81,16 @@ about sample updates and skewed distributions (see
 skewed the true posterior, the more efficient sample-based planning
 becomes.
 
+Competitive-landscape note (2026-07): the top public notebook on the
+competition determinizes crudely — `random.sample` over the full
+60-card list ignoring already-seen cards, opponent deck filled with
+dummy Snorlax. Even *option 1 below* (plain consistency) is already
+differentiated from the public baseline; the engine accepts arbitrary
+determinizations without validation, so consistency is entirely the
+caller's edge to build (see
+[`phase3-implementation-plan.md`](phase3-implementation-plan.md),
+"Findings from the top public notebook").
+
 Analog from classical AI: the *Clue / Detetive* solver. Given a set of
 accusations and denials, a constraint satisfaction algorithm
 (constraint propagation + arc consistency + backtracking) narrows the
@@ -546,7 +556,14 @@ $\Delta_{\text{ceiling}}$ using the shared seeds.
 - **Cost:** ~1 day. The implementation reuses the ISMCTS four-phase
   loop; the only change is "skip determinization, use the true state".
   Requires an env-level toggle to expose $s$ instead of $I(s)$ —
-  small addition to `env/wrapper.py`.
+  small addition to `env/wrapper.py`. Implementation hint: locally
+  the engine's `visualize_data()` returns the full board state for
+  the renderer, and `search_begin` accepts arbitrary hidden
+  assignments without validation — so the oracle can be built by
+  feeding the *true* hidden state (recovered from the visualizer
+  data or from driving both seats ourselves) into the same
+  `search_begin` path the ISMCTS agent uses. No separate engine mode
+  needed.
 - **Descope path:** none needed. This is the least risky idea in the
   file precisely because it's diagnostic, not architectural.
 - **Interpretation risk:** the ceiling depends on the reference

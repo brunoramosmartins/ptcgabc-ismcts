@@ -6,14 +6,33 @@
 
 ## Pre-Registered Hypotheses
 
-> **Status:** DRAFT — hypotheses are **locked at the end of Phase 2** (see roadmap). Do not edit H1–H4 after the Phase 2 tag `v0.3-hypotheses` without recording a research-log entry.
+> **Status: LOCKED 2026-07-09** (tag `v0.3-hypotheses` on the merge
+> commit of the lock PR). No edits to H1–H4 after this point without a
+> research-log entry recording what changed and why. Verdicts are
+> filled exclusively by the registered experiments named in each row.
 
 | ID | Statement | Test | Metric | Verdict |
 |---|---|---|---|---|
-| **H1** | ISMCTS with random rollouts outperforms the heuristic-only baseline. | Phase 3 head-to-head (`exp_*`) | Win-rate Δ + Wilson 95% CI + paired bootstrap | _pending_ |
-| **H2** | Heuristic-guided rollouts outperform random rollouts within ISMCTS. | `scripts/exp_ablation_rollout.py` | Win-rate Δ + paired test on shared seeds | _pending_ |
-| **H3** | Ladder performance improves monotonically with simulations/decision until the per-match time budget binds. | `scripts/exp_sensitivity_simulations.py` | Rating vs sims, breakpoint identification | _pending_ |
-| **H4** | Every feature in the final heuristic evaluator contributes non-trivially. | `scripts/exp_ablation_evaluator.py` | Per-feature Δ + Bonferroni-corrected paired tests | _pending_ |
+| **H1** | SO-ISMCTS with uniform consistent determinization and random rollouts beats the deterministic heuristic baseline in head-to-head play. | EXP-003: `scripts/local_ladder.py --agent-a ismcts --agent-b heuristic`, N = 500 paired seeds | ISMCTS win rate with Wilson 95% CI; **supported** iff the lower CI bound exceeds 0.5 | _pending_ |
+| **H2** | Heuristic-guided rollouts outperform random rollouts within ISMCTS. | `scripts/exp_ablation_rollout.py`, shared match seeds | Win-rate Δ + paired test (McNemar / paired bootstrap) on shared seeds | _pending_ |
+| **H3** | Local head-to-head win rate against the fixed heuristic reference improves monotonically with iterations/decision until the per-decision time budget binds; the breakpoint lies in the hundreds-to-low-thousands range (root-convergence floor ≈ $k \cdot b$, ex02.5). | `scripts/exp_sensitivity_simulations.py`, sweep {30, 100, 300, 1000, 3000} iterations | Win rate per level with Wilson 95% CI; monotonic-trend check + breakpoint identification | _pending_ |
+| **H4** | Every feature in the final heuristic evaluator contributes non-trivially. | `scripts/exp_ablation_evaluator.py` | Per-feature Δ + raw and Bonferroni-corrected paired p-values | _pending_ |
+
+Lock-time refinements (recorded here for transparency; all made
+*before* any hypothesis-testing experiment ran):
+
+- **H1** — algorithm variant, determinization policy, opponent, and
+  decision rule pinned. "Outperforms" operationalized as
+  Wilson-lower-bound > 0.5 in direct head-to-head, the same criterion
+  EXP-002a used.
+- **H3** — primary metric moved from Kaggle ladder rating to local
+  win rate versus the fixed heuristic reference. The ladder pool is
+  uncontrolled and non-stationary (opponents enter and leave daily);
+  a monotonicity claim is only testable against a fixed opponent.
+  Ladder rating remains a secondary, descriptive observation. The
+  sweep grid crosses the measured affordability point (~2,000
+  iterations/decision, `notes/phase3-implementation-plan.md`) from
+  both sides.
 
 ## Methodology
 
