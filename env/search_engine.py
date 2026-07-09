@@ -52,7 +52,16 @@ import ctypes
 import json
 from typing import Any
 
-from kaggle_environments.envs.cabt.cg import sim
+# Import path differs by environment:
+# - local dev / our venv: the engine lives under kaggle-environments.
+# - Kaggle submission runtime: `cg` is a top-level package (the sample
+#   submission does `from cg.api import ...`).
+# Our ctypes bindings talk to the same native library either way, so we
+# only need `sim` (which exposes `sim.lib`).
+try:
+    from kaggle_environments.envs.cabt.cg import sim
+except ModuleNotFoundError:  # pragma: no cover - Kaggle runtime path
+    from cg import sim
 
 lib = sim.lib
 

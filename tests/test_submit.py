@@ -71,3 +71,20 @@ def test_main_must_define_agent(tmp_path: pathlib.Path) -> None:
 
     with pytest.raises(ValueError, match="agent"):
         build_bundle(main, deck, out)
+
+
+def test_with_engine_bundles_search_stack(tmp_path: pathlib.Path) -> None:
+    main = tmp_path / "main.py"
+    deck = tmp_path / "deck.csv"
+    out = tmp_path / "submission.tar.gz"
+    _write_valid_main(main)
+    _write_valid_deck(deck)
+
+    build_bundle(main, deck, out, with_engine=True)
+
+    with tarfile.open(out, "r:gz") as tar:
+        names = set(tar.getnames())
+    assert {"main.py", "deck.csv"} <= names
+    assert "search/ismcts.py" in names
+    assert "env/search_engine.py" in names
+    assert "search/determinize.py" in names

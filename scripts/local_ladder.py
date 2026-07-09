@@ -44,6 +44,7 @@ if str(REPO_ROOT) not in sys.path:
 from agents.base import Agent  # noqa: E402
 from agents.heuristic_agent import HeuristicAgent  # noqa: E402
 from agents.ismcts_agent import ISMCTSAgent  # noqa: E402
+from agents.pimc_agent import PIMCAgent  # noqa: E402
 from agents.random_agent import RandomAgent  # noqa: E402
 from stats.wilson import wilson_interval  # noqa: E402
 
@@ -71,10 +72,20 @@ def _ismcts_builder(seed: int, deck: list[int], iterations: int) -> Agent:
     )
 
 
+def _pimc_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    return PIMCAgent(
+        my_deck_list=deck,
+        opponent_deck_list=deck,   # mirror matches: the list is known
+        iterations=iterations,
+        rng=random.Random(seed),
+    )
+
+
 AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "random": _random_builder,
     "heuristic": _heuristic_builder,
     "ismcts": _ismcts_builder,
+    "pimc": _pimc_builder,
 }
 
 
