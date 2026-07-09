@@ -101,25 +101,39 @@ def run_match(
     seed: int,
     iterations: int,
 ) -> dict:
-    """Play one match; returns per-match row including fallback counts."""
+    """Play one match; returns per-match row including fallback details."""
+    import time
+
     from kaggle_environments import make
 
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
     agent_a = builder_a(seed, deck, iterations)
     agent_b = builder_b(seed, deck, iterations)
 
+    t0 = time.perf_counter()
     env.run([_wrap_for_cabt(agent_a, deck), _wrap_for_cabt(agent_b, deck)])
+    seconds = time.perf_counter() - t0
 
     reward_a = env.state[0]["reward"]
     reward_b = env.state[1]["reward"]
-    return {
+    events_a = list(getattr(agent_a, "fallback_events", []))
+    events_b = list(getattr(agent_b, "fallback_events", []))
+    row = {
         "seed": seed,
         "reward_a": reward_a,
         "reward_b": reward_b,
         "outcome_for_a": _sign(reward_a - reward_b),
-        "fallbacks_a": len(getattr(agent_a, "fallback_events", [])),
-        "fallbacks_b": len(getattr(agent_b, "fallback_events", [])),
+        "seconds": round(seconds, 2),
+        "fallbacks_a": len(events_a),
+        "fallbacks_b": len(events_b),
     }
+    # Full event strings (turn + error) only when present — the
+    # investigation trail for the EXP validity flag.
+    if events_a:
+        row["fallback_events_a"] = events_a
+    if events_b:
+        row["fallback_events_b"] = events_b
+    return row
 
 
 def _sign(x: float) -> int:

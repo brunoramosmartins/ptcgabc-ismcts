@@ -12,31 +12,31 @@ function that implements it.
 
 ```mermaid
 sequenceDiagram
-    participant L as local_ladder.main()<br/>(scripts/local_ladder.py)
-    participant E as cabt env<br/>(kaggle_environments)
-    participant W as _wrap_for_cabt()<br/>(scripts/local_ladder.py)
-    participant A as ISMCTSAgent.choose()<br/>(agents/ismcts_agent.py)
-    participant H as HeuristicAgent.choose()<br/>(agents/heuristic_agent.py)
+    participant L as local_ladder main<br/>scripts/local_ladder.py
+    participant E as cabt env<br/>kaggle_environments
+    participant W as wrapper<br/>_wrap_for_cabt
+    participant A as ISMCTSAgent.choose<br/>agents/ismcts_agent.py
+    participant H as HeuristicAgent.choose<br/>agents/heuristic_agent.py
 
-    L->>L: build agents via AGENT_REGISTRY[name](seed, deck, iterations)
-    L->>E: make("cabt", randomSeed=seed); env.run([wrap_a, wrap_b])
-    loop until current.result != -1
-        E->>W: obs dict (select, current, logs, search_begin_input)
-        alt first call (obs.select is None)
-            W-->>E: 60-card deck list
-        else acting seat = ISMCTS
-            W->>A: choose(obs)
+    L->>L: build both agents from AGENT_REGISTRY<br/>with seed + deck + iterations
+    L->>E: make cabt with randomSeed<br/>then env.run with both wrappers
+    loop until current.result is not -1
+        E->>W: obs dict with select / current / logs / blob
+        alt first call - select is None
+            W-->>E: the 60-card deck list
+        else ISMCTS seat acts
+            W->>A: choose obs
             A-->>W: option indices
             W-->>E: indices
-        else acting seat = heuristic
-            W->>H: choose(obs)
+        else heuristic seat acts
+            W->>H: choose obs
             H-->>W: first maxCount indices
             W-->>E: indices
         end
-        E->>E: apply selection, resolve effects,<br/>advance state (native engine)
+        E->>E: apply selection and advance state<br/>native engine resolves effects
     end
-    E-->>L: env.state rewards
-    L->>L: row {outcome, fallbacks}; summarize()<br/>→ Wilson CI (stats/wilson.py)
+    E-->>L: final rewards per seat
+    L->>L: per-match row with outcome and fallbacks<br/>summarize gives Wilson CI via stats/wilson.py
 ```
 
 ## Zoom 2 — one ISMCTS decision (`ismcts.decide`)
@@ -46,39 +46,39 @@ in-game decision. Budget: `iterations` (EXP-003: 1000).
 
 ```mermaid
 sequenceDiagram
-    participant D as ismcts.decide()<br/>(search/ismcts.py)
-    participant S as sample_determinization()<br/>(search/determinize.py)
-    participant B as search_begin/step/end()<br/>(env/search_engine.py)
-    participant N as InfoSetNode<br/>(search/node.py)
-    participant U as ucb1_score()<br/>(search/ucb.py)
+    participant D as ismcts.decide<br/>search/ismcts.py
+    participant S as sample_determinization<br/>search/determinize.py
+    participant B as search engine bindings<br/>env/search_engine.py
+    participant N as InfoSetNode<br/>search/node.py
+    participant U as ucb1_score<br/>search/ucb.py
 
-    D->>D: root = InfoSetNode()<br/>root_moves = enumerate_moves(obs.select)
-    loop iterations (default 1000)
-        D->>S: sample_determinization(obs, decks, rng)
-        S->>S: visible_cards(): recursive sweep by playerIndex
-        S->>S: hidden pools = 60-list − visible;<br/>shuffle; slice deck/prize/hand segments
+    D->>D: create root InfoSetNode<br/>enumerate_moves on the real select
+    loop iterations - default 1000
+        D->>S: sample_determinization with obs + decks + rng
+        S->>S: visible_cards - recursive sweep by playerIndex
+        S->>S: hidden pool = 60-list minus visible<br/>shuffle then slice deck / prize / hand segments
         S-->>D: determinization kwargs
-        D->>B: search_begin(obs, **det)
-        B->>B: lib.SearchBegin(blob + arrays)<br/>→ engine rebuilds the battle
-        B-->>D: {observation, search_id}
+        D->>B: search_begin with obs and kwargs
+        B->>B: native SearchBegin rebuilds the battle<br/>from blob + our hidden assignment
+        B-->>D: observation + search_id
         loop selection descent
-            D->>D: enumerate_moves(select)<br/>keys = canonical option JSON
-            D->>N: mark_available(keys)  [m_a += 1]
+            D->>D: enumerate_moves - canonical content keys
+            D->>N: mark_available - availability m_a grows
             alt node has unvisited available moves
-                D->>D: EXPAND: rng.choice(unvisited)
-                D->>B: search_step(id, indices)
-                D->>D: ROLLOUT: uniform random到 terminal<br/>(_rollout, ~93 steps, ~11 ms)
+                D->>D: EXPAND - pick one unvisited at random
+                D->>B: search_step with its indices
+                D->>D: ROLLOUT - uniform random to terminal<br/>about 93 steps and 11 ms
             else all available moves visited
-                D->>U: score = q(±sign) + c·√(ln m_a / n_a)
-                Note over D,U: sign flips at opponent nodes<br/>(they minimize root's value)
-                D->>B: search_step(id, best move indices)
+                D->>U: score = signed q plus c sqrt of ln m_a over n_a
+                Note over D,U: sign flips at opponent nodes<br/>they minimize the root value
+                D->>B: search_step with the best move
             end
         end
-        D->>N: BACKPROP: node.update(r_T) along path<br/>r_T ∈ {−1, 0, +1} from root's perspective
+        D->>N: BACKPROP - node.update with terminal reward<br/>plus-one / zero / minus-one from root perspective
     end
-    D->>B: search_end()  [engine recycles memory]
-    D->>N: root.best_action_by_visits()
-    D-->>D: map winning key → indices in the REAL obs;<br/>return list[int]
+    D->>B: search_end - engine recycles memory
+    D->>N: best_action_by_visits at the root
+    D-->>D: map winning key to indices of the real obs<br/>return the indices list
 ```
 
 ## The same story as a table
