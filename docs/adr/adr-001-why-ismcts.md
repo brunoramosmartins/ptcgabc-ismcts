@@ -38,7 +38,12 @@ Use **Information-Set Monte Carlo Tree Search (ISMCTS)** — specifically the
 - UCB1 selection at information-set nodes,
 - **determinization**: at each iteration, sample a hidden state
   $h \sim P(h \mid I)$ compatible with the root information set, then simulate
-  as if the game were perfect-information,
+  as if the game were perfect-information. $P$ is **uniform** over $I$ in
+  the baseline (this ADR); an informed non-uniform variant using public
+  evidence (deck lists, discard, board state) is a candidate Phase-5
+  exploratory experiment or post-competition amendment — see
+  [`../../notes/open-ideas.md`](../../notes/open-ideas.md) under
+  *informed-determinization*.
 - random rollouts in Phase 3; heuristic-guided rollouts added in Phase 4 (see
   ADR-003),
 - terminal reward only (see ADR-004),

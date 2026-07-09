@@ -18,3 +18,39 @@
 ## Methodology
 
 See `docs/benchmark-protocol.md` for the fixed match-set, seed, and hardware protocol every hypothesis test respects. See `experiments/registry.md` for the full experiment ledger.
+
+## Exploratory extensions (not pre-registered)
+
+Ideas that surfaced during study but are **not** part of the H1–H4
+lock. Candidates for Phase 5 exploratory experiments or
+post-competition portfolio extensions. See
+[`../notes/open-ideas.md`](../notes/open-ideas.md) for the full
+schema and rationale per idea.
+
+- **oracle-baseline-cheating-uct** — diagnostic upper bound: give UCT
+  the true state (no determinization) to measure the ceiling that any
+  imperfect-information algorithm can achieve. Gates every belief-
+  based idea below. Phase 3 addendum.
+- **pimc-baseline-determinized-uct** — PIMC (independent per-
+  determinization UCT + vote) as a fourth arm in the same Phase 3
+  diagnostic run. Decomposes the gap: $W_{\text{ISMCTS}} -
+  W_{\text{PIMC}}$ measures the value of the shared info-set tree
+  (Cowling's claim) in PTCG specifically. Interpretive, not gating.
+- **informed-determinization** — replace uniform $P(h \mid I)$ with a
+  distribution informed by public evidence (deck lists, discard,
+  board state). Gated on the oracle baseline: pursue only if the
+  ceiling gap $\gtrsim$ 5 pp. Candidate Phase 5 exploratory or post-
+  competition amendment. See
+  [`../notes/open-ideas.md`](../notes/open-ideas.md) under
+  *informed-determinization*.
+- **archetype-conditioned-rave** — RAVE statistics conditioned on the
+  inferred opponent archetype. Transitively gated on the oracle
+  baseline (via *informed-determinization*'s archetype module). See
+  [`../notes/open-ideas.md`](../notes/open-ideas.md).
+- **progressive-widening-with-action-ranking** — heuristic action
+  ranking + progressive widening for the high-branching-factor
+  setting. Independent of the belief-based line. Phase 5 exploratory.
+  See [`../notes/open-ideas.md`](../notes/open-ideas.md).
+- **transposition-tables-for-info-sets** — hash-based sharing of
+  statistics across equivalent info-sets. Pure speedup, not a
+  research question. Phase 5 exploratory or post-competition.
