@@ -184,3 +184,18 @@ alive.
   Energy/Trainer — an invalid board state the engine rejected. Fixed by
   filtering that slot to Basic Pokémon via the engine's `AllCard`
   database.
+- **ISMCTS submission failed validation — `__file__` undefined, and a
+  validation test that was theatre.** The Kaggle worker runs `main.py`
+  via `exec(code, env)`, where `__file__` is not defined; the shim's
+  `sys.path` bootstrap used `os.path.abspath(__file__)` and crashed at
+  import, before any decision. Two submission slots burned before we
+  read the agent logs. Worse: the local bundle validator I wrote to
+  prevent exactly this missed it, because it loaded the agent via
+  `import main` (where `__file__` *is* defined) instead of by path
+  (which makes kaggle-environments `exec` it, as the worker does). Lesson,
+  now baked into `validate_bundle.py`'s docstring: **a validation
+  harness that doesn't load the artifact the way production loads it is
+  theatre.** Fix: guard the `__file__` use with try/except (fall back to
+  `/kaggle_simulations/agent` + CWD); validator now loads by path and
+  reproduces the exec. Timing was never the problem — self-play is ~45 s
+  local, worker banks 600 s overage/agent/episode.

@@ -38,9 +38,18 @@ import os
 import random
 import sys
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-for _root in (_HERE, "/kaggle_simulations/agent"):
-    if _root not in sys.path:
+# Kaggle runs this file via exec(), where __file__ is undefined — so we
+# cannot derive our directory from it. On the worker the agent always
+# lives at /kaggle_simulations/agent/; locally (import or exec from the
+# bundle dir) the CWD is that dir. Cover both, plus __file__ when it
+# does exist (normal import, e.g. tests).
+_ROOTS = ["/kaggle_simulations/agent", os.getcwd()]
+try:
+    _ROOTS.insert(0, os.path.dirname(os.path.abspath(__file__)))
+except NameError:  # pragma: no cover - Kaggle exec() path
+    pass
+for _root in _ROOTS:
+    if _root and _root not in sys.path:
         sys.path.insert(0, _root)
 
 from env.search_engine import SearchApiError  # noqa: E402

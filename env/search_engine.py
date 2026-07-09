@@ -53,15 +53,17 @@ import json
 from typing import Any
 
 # Import path differs by environment:
-# - local dev / our venv: the engine lives under kaggle-environments.
 # - Kaggle submission runtime: `cg` is a top-level package (the sample
-#   submission does `from cg.api import ...`).
-# Our ctypes bindings talk to the same native library either way, so we
-# only need `sim` (which exposes `sim.lib`).
+#   submission does `from cg.api import ...`). We MUST use this one so
+#   we share the runtime's already-loaded native library instance —
+#   `sim` runs GameInitialize() at import, and a second copy loaded via
+#   another path would fight the runtime for the native global state.
+# - local dev / our venv: `cg` isn't top-level; the engine lives under
+#   kaggle-environments, so we fall back to that.
 try:
+    from cg import sim  # pragma: no cover - Kaggle runtime path
+except ModuleNotFoundError:
     from kaggle_environments.envs.cabt.cg import sim
-except ModuleNotFoundError:  # pragma: no cover - Kaggle runtime path
-    from cg import sim
 
 lib = sim.lib
 
