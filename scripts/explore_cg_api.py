@@ -1,28 +1,30 @@
-"""Phase 3 feasibility spike: what does the cg engine expose for search?
+"""Phase 3 feasibility spike v2: probe the cg engine's search API.
 
-The whole Phase 3 architecture hinges on one question: how do we
-simulate PTCG matches *inside* the ISMCTS loop? Three candidate paths,
-from best to worst:
+Spike v1 findings (2026-07):
 
-  A. The engine consumes ``obs["search_begin_input"]`` — the serialized
-     blob it hands the agent at every decision — to reconstruct a
-     battle mid-game. If a native export like ``BattleStartFromSearchInput``
-     exists, determinization + forward simulation are engine-native and
-     Phase 3 collapses to wiring.
-  B. No mid-game reconstruction, but multiple concurrent battles are
-     possible by managing ``battle_ptr`` handles manually. Then rollouts
-     must replay from turn 1 (slow but possible) or we simulate with an
-     approximate model.
-  C. Neither works → we need our own forward model (out of scope for
-     the deadline; would force a redesign).
+- The native lib exports a full search API: ``SearchBegin``,
+  ``SearchStep``, ``SearchEnd``, ``SearchRelease`` — plus ``AgentStart``,
+  ``AllCard``, ``AllAttack``.
+- The cabt docs (matsuoinstitute.github.io/cabt/api.html) document the
+  Python-level wrappers:
+  ``search_begin(agent_observation, your_deck, your_prize,
+  opponent_deck, opponent_prize, opponent_hand, opponent_active,
+  manual_coin=False) -> SearchState`` — i.e. the CALLER supplies the
+  determinization and the engine reconstructs a playable battle.
+  ``search_step(search_id, select) -> SearchState``.
+- Those Python wrappers (``cg/api.py``) are NOT shipped in
+  kaggle-environments 1.30.2; only the native symbols are. The exact
+  ctypes marshalling is the remaining unknown — acquired separately
+  (see notes/phase3-implementation-plan.md), not blind-probed here,
+  because a wrong signature can segfault.
+- Two concurrent battles via manual ptr bookkeeping: confirmed working.
+- v1's timing section had a bug: ``current.result`` is ``-1`` while the
+  game is in progress (not None/"none"), so every game "ended" at step
+  0. Fixed here.
 
-This script probes all three plus timing. Run it and paste the full
-output back:
+Run and paste the full output:
 
     python scripts/explore_cg_api.py
-
-Read-only reconnaissance — it starts/finishes local battles via the
-bundled shared library, never touches Kaggle.
 """
 
 from __future__ import annotations
@@ -40,106 +42,58 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+RESULT_IN_PROGRESS = -1
+
 
 def section(title: str) -> None:
     print(f"\n{'=' * 60}\n{title}\n{'=' * 60}")
 
 
-def main() -> int:  # noqa: PLR0915 - linear reconnaissance script
-    section("0. Imports")
-    from kaggle_environments.envs.cabt.cg import game, sim  # noqa: PLC0415
-
-    lib = sim.lib
-    lib_path = sim.lib_path
-    print(f"loaded native lib: {lib_path}")
-
-    section("1. Native exports — candidate search/clone symbols")
-    candidates = [
-        "BattleStart", "BattleFinish", "GetBattleData", "Select",
-        "VisualizeData", "GameInitialize",
-        # hypothetical search hooks:
-        "SearchBegin", "BeginSearch", "SearchBattleStart",
-        "BattleStartFromSearchInput", "BattleStartSearch", "StartSearch",
-        "SearchStart", "BattleResume", "ResumeBattle", "BattleClone",
-        "CloneBattle", "BattleCopy", "CopyBattle", "SetBattleData",
-        "LoadBattleData", "BattleLoad", "Simulate", "SimulateBattle",
-    ]
-    for name in candidates:
-        try:
-            getattr(lib, name)
-            print(f"  EXPORTED : {name}")
-        except AttributeError:
-            print(f"  missing  : {name}")
-
-    section("1b. Full dynamic symbol table (nm -D), if available")
-    try:
-        out = subprocess.run(
-            ["nm", "-D", str(lib_path)],
-            capture_output=True, text=True, timeout=30,
-        )
-        lines = [
-            ln for ln in out.stdout.splitlines()
-            if " T " in ln or " t " in ln
-        ]
-        print(f"  {len(lines)} defined symbols:")
-        for ln in lines:
-            print("   ", ln)
-    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-        print(f"  nm unavailable ({exc}); rely on section 1.")
-
-    section("2. Start a battle; inspect the observation")
-    deck = [int(x) for x in
+def load_deck() -> list[int]:
+    return [int(x) for x in
             (REPO_ROOT / "decks" / "selected" / "deck.csv")
             .read_text().splitlines()[:60]]
-    obs, start = game.battle_start(deck, deck)
-    print(f"battle_ptr: {hex(start.battlePtr or 0)}")
-    print(f"obs keys: {sorted(obs.keys())}")
-    print(f"select keys: {sorted(obs['select'].keys()) if obs.get('select') else None}")
-    print(f"current keys: {sorted(obs['current'].keys()) if obs.get('current') else None}")
 
-    sbi = obs.get("search_begin_input")
-    print(f"search_begin_input: type={type(sbi).__name__}, len={len(sbi) if sbi else 0}")
-    if sbi:
-        print(f"  first 120 chars: {sbi[:120]!r}")
-        print(f"  charset sample: {sorted(set(sbi[:2000]))[:40]}")
 
-    section("3. Can two battles coexist? (manual ptr bookkeeping)")
-    ptr_a = start.battlePtr
+def main() -> int:  # noqa: PLR0915 - linear reconnaissance script
+    section("0. Imports")
+    from kaggle_environments.envs.cabt.cg import sim  # noqa: PLC0415
+
+    lib = sim.lib
+    print(f"loaded native lib: {sim.lib_path}")
+
+    deck = load_deck()
     cards = deck + deck
-    arg = (ctypes.c_int * len(cards))(*cards)
-    start_b = lib.BattleStart(arg)
-    ptr_b = start_b.battlePtr
-    print(f"ptr_a={hex(ptr_a or 0)}  ptr_b={hex(ptr_b or 0)}  distinct={ptr_a != ptr_b}")
-    if ptr_b:
-        sd_a = lib.GetBattleData(ptr_a)
-        sd_b = lib.GetBattleData(ptr_b)
-        obs_a = json.loads(sd_a.json.decode())
-        obs_b = json.loads(sd_b.json.decode())
-        same_after_reads = obs_a.get("current") is not None and obs_b.get("current") is not None
-        print(f"both battles readable after interleaved GetBattleData: {same_after_reads}")
-        lib.BattleFinish(ptr_b)
-        print("finished battle B; checking battle A still alive...")
-        sd_a2 = lib.GetBattleData(ptr_a)
-        print(f"battle A still readable: {sd_a2.json is not None}")
 
-    section("4. Timing — full random games via raw ptr calls")
+    def new_battle() -> int:
+        arg = (ctypes.c_int * len(cards))(*cards)
+        return lib.BattleStart(arg).battlePtr
+
+    def read_obs(ptr: int) -> dict:
+        sd = lib.GetBattleData(ptr)
+        o = json.loads(sd.json.decode())
+        o["search_begin_input"] = ctypes.string_at(sd.data, sd.count).decode("ascii")
+        o["_select_player"] = sd.selectPlayer
+        return o
+
+    section("1. Full random games — timing (v1 bug fixed)")
     rng = random.Random(7)
 
-    def play_random_game() -> tuple[int, float]:
-        arg2 = (ctypes.c_int * len(cards))(*cards)
-        sd0 = lib.BattleStart(arg2)
-        ptr = sd0.battlePtr
+    def play_random_game(collect_blobs: bool = False):
+        ptr = new_battle()
         steps = 0
+        blobs: list[str] = []
         t0 = time.perf_counter()
         while True:
-            sd = lib.GetBattleData(ptr)
-            o = json.loads(sd.json.decode())
-            if o.get("current", {}).get("result") is not None \
-                    and o["current"]["result"] != "none":
+            o = read_obs(ptr)
+            if o["current"]["result"] != RESULT_IN_PROGRESS:
                 break
             sel = o.get("select")
             if sel is None:
+                print(f"  select=None mid-game at step {steps} (unexpected)")
                 break
+            if collect_blobs:
+                blobs.append(o["search_begin_input"])
             k = sel["maxCount"]
             n = len(sel["option"])
             choice = rng.sample(range(n), k)
@@ -149,34 +103,91 @@ def main() -> int:  # noqa: PLR0915 - linear reconnaissance script
                 print(f"  Select error {err} at step {steps}")
                 break
             steps += 1
-            if steps > 2000:
+            if steps > 3000:
                 print("  step cap hit")
                 break
         dt = time.perf_counter() - t0
+        result = read_obs(ptr)["current"]["result"]
         lib.BattleFinish(ptr)
-        return steps, dt
+        return steps, dt, result, blobs
 
-    games = [play_random_game() for _ in range(5)]
-    for i, (steps, dt) in enumerate(games):
-        per_step = (dt / steps * 1000) if steps else float("nan")
-        print(f"  game {i}: {steps} decisions in {dt:.3f}s "
-              f"({per_step:.2f} ms/decision)")
-    all_steps = [s for s, _ in games if s]
-    all_dt = [d for _, d in games]
-    if all_steps:
-        print(f"  median decisions/game: {statistics.median(all_steps)}")
-        print(f"  median s/full-game:    {statistics.median(all_dt):.3f}")
+    games = [play_random_game() for _ in range(10)]
+    for i, (steps, dt, result, _) in enumerate(games):
+        per = (dt / steps * 1000) if steps else float("nan")
+        print(f"  game {i}: {steps:4d} decisions, {dt:6.3f}s "
+              f"({per:6.2f} ms/decision), result={result}")
+    ok = [(s, d) for s, d, _, _ in games if s > 0]
+    if ok:
+        print(f"  median decisions/game: {statistics.median(s for s, _ in ok)}")
+        print(f"  median s/full-game:    {statistics.median(d for _, d in ok):.3f}")
+        print(f"  median ms/decision:    "
+              f"{statistics.median(d / s * 1000 for s, d in ok):.2f}")
 
-    section("5. Determinization surface — what does obs reveal?")
-    sel = obs.get("select")
-    if sel and sel.get("option"):
-        print(f"first option repr: {json.dumps(sel['option'][0])[:200]}")
-    cur = obs.get("current") or {}
-    for key in sorted(cur.keys()):
-        val = json.dumps(cur[key])
-        print(f"  current[{key!r}] = {val[:160]}{'…' if len(val) > 160 else ''}")
+    section("2. Does search_begin_input evolve during the game?")
+    steps, _, _, blobs = play_random_game(collect_blobs=True)
+    uniq = len(set(blobs))
+    print(f"  {steps} decisions, {len(blobs)} blobs collected, {uniq} unique")
+    if blobs:
+        lens = sorted({len(b) for b in blobs})
+        print(f"  blob lengths seen: {lens[:10]}")
+        print(f"  first blob : {blobs[0][:80]!r}")
+        if len(blobs) > 1:
+            print(f"  last blob  : {blobs[-1][:80]!r}")
 
-    game.battle_finish()
+    section("3. Result-code census (what values does result take?)")
+    results = [r for _, _, r, _ in games]
+    print(f"  results across 10 games: {sorted(set(results))} "
+          f"(counts: {[ (v, results.count(v)) for v in sorted(set(results)) ]})")
+
+    section("4. AllCard / AllAttack probes (char* returns, per Export.cpp)")
+    probe_template = r"""
+import ctypes, json, sys
+from kaggle_environments.envs.cabt.cg import sim
+lib = sim.lib
+lib.{fn}.restype = ctypes.c_char_p
+lib.{fn}.argtypes = []
+raw = lib.{fn}()
+data = json.loads(raw.decode("utf-8"))
+kind = type(data).__name__
+size = len(data) if hasattr(data, '__len__') else 'n/a'
+print(f"{fn}: json parsed ok, type={{kind}}, len={{size}}")
+if isinstance(data, list) and data:
+    print("first entry:", json.dumps(data[0])[:300])
+"""
+    for fn in ("AllCard", "AllAttack"):
+        code = probe_template.replace("{fn}", fn)
+        r = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=60,
+        )
+        status = "ok" if r.returncode == 0 else f"rc={r.returncode} (segfault if -11)"
+        print(f"  {fn}: {status}")
+        for line in (r.stdout or "").splitlines():
+            print(f"    {line}")
+        if r.returncode != 0 and r.stderr:
+            print(f"    stderr: {r.stderr.splitlines()[-1][:200]}")
+
+    section("5. Hidden-info surface at a mid-game decision")
+    ptr = new_battle()
+    for _ in range(20):
+        o = read_obs(ptr)
+        if o["current"]["result"] != RESULT_IN_PROGRESS or o.get("select") is None:
+            break
+        sel = o["select"]
+        choice = rng.sample(range(len(sel["option"])), sel["maxCount"])
+        c_arr = (ctypes.c_int * len(choice))(*choice)
+        lib.Select(ptr, c_arr, len(choice))
+    o = read_obs(ptr)
+    me = o["current"]["yourIndex"]
+    for label, p in (("me", o["current"]["players"][me]),
+                     ("opp", o["current"]["players"][1 - me])):
+        keys = {k: (len(v) if isinstance(v, list) else v)
+                for k, v in p.items() if k in
+                ("deckCount", "handCount", "hand", "prize", "discard",
+                 "active", "bench")}
+        print(f"  {label}: {keys}")
+    lib.BattleFinish(ptr)
+
     section("DONE — paste everything above back into the chat")
     return 0
 
