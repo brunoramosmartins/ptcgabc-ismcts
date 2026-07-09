@@ -242,6 +242,34 @@ Progressive Widening and Transposition Tables (which don't depend on
 opponent modeling). Large gap → the target architecture above becomes
 worth implementing.
 
+### The experimental ladder (research architecture)
+
+The measurement layer matters as much as the agent. Consolidated after
+the Long reading: the Phase 3 diagnostic experiment runs **four agents
+on the same 200 paired seeds** against the fixed heuristic reference,
+decomposing the total gap into interpretable pieces.
+
+```
+Random ── floor sanity check (EXP-001, done: 364.6 ladder)
+   │
+Heuristic ── reference opponent (EXP-002, done: 527.9 ladder, 75.5% local)
+   │
+PIMC (Determinized UCT) ──┐
+   │                      │  W_ISMCTS − W_PIMC = value of the shared
+ISMCTS (SO, ADR-001) ─────┘  info-set tree (Cowling's claim, in PTCG)
+   │
+Cheating UCT (oracle) ── W_cheat − W_ISMCTS = Δ_ceiling
+                          (cost of hidden information; gates the
+                           belief pipeline)
+```
+
+Entries in [`open-ideas.md`](open-ideas.md):
+*pimc-baseline-determinized-uct* and *oracle-baseline-cheating-uct*.
+Long's three properties (leaf correlation, bias, disambiguation)
+predict both deltas before the run — priors registered in
+[`phase2-long-2010-notes.md`](phase2-long-2010-notes.md) §4.2
+(prediction: medium $\Delta_{\text{ceiling}}$, 5–15 pp).
+
 ### What the sketch is missing
 
 The sketch is a decision-time pipeline; it doesn't show:

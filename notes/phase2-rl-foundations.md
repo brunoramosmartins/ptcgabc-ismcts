@@ -1710,7 +1710,34 @@ architecture implemented in our project.
 
 **My take.**
 
-_(fill in)_
+With a single state $s_0$, the action-value definition from Ch 3,
+
+$$
+q_\pi(s_0, a) \;=\; \mathbb{E}\!\left[ G_t \mid S_t = s_0,\, A_t = a \right],
+$$
+
+loses its dependence on the policy and on successor states: every
+transition returns to $s_0$, so the return reduces to the immediate
+reward (episodic single-step case), and the expectation is just the
+mean reward of arm $a$ — exactly Ch 2's $Q(a) = \mathbb{E}[R \mid A = a]$.
+The policy $\pi$ becomes irrelevant to the value of an action because
+there is no "where you land next" to account for.
+
+Allowing $|S| > 1$ generalizes two things at once. First, actions gain
+consequences beyond their immediate reward — they move the agent to
+states with different opportunity sets, so action values must include
+the discounted value of the successor ($r + \gamma\, v_\pi(s')$).
+Second, the policy becomes load-bearing: $q_\pi$ depends on how the
+agent will behave *after* the transition, which is why every Ch 3
+value function carries the $\pi$ subscript while Ch 2's $Q(a)$ does not.
+
+The machinery Ch 3 adds that Ch 2 doesn't need: the transition kernel
+$p(s', r \mid s, a)$, the discount $\gamma$, the Bellman recursion
+(values defined in terms of other values), and the distinction between
+prediction ($v_\pi$) and control ($v_*$). Ch 2 needs none of these
+because with one state there is nothing to bootstrap from — the
+"credit assignment over time" problem that defines RL only appears
+when actions influence future states.
 
 ---
 
@@ -1730,7 +1757,32 @@ read Ch 4–7 (which you may or may not, given the roadmap).
 
 **My take.**
 
-_(fill in)_
+The five lines form a two-axis taxonomy. Axis one: **what generates
+the experience** — the real environment (Ch 5–7) or a model/simulator
+(Ch 4 and Ch 8). Axis two: **how much of the trajectory backs up the
+update** — the full return to termination (Ch 5, Ch 8), one step plus
+a bootstrapped estimate (Ch 6), or $n$ steps plus bootstrap (Ch 7),
+with Ch 4 as the limiting case where the "trajectory" is an exact
+one-step expectation over all successors.
+
+MCTS's line, restated: it is Monte Carlo evaluation (full-trajectory
+sample updates, no bootstrapping in the vanilla form) applied to
+*simulated* trajectories, where the early part of each trajectory is
+chosen by a policy that improves as the tree grows (UCB1 inside the
+tree) and the late part by a fixed default policy (the rollout).
+The "tree-restricted" qualifier is what separates MCTS from plain
+Monte Carlo policy evaluation: the policy generating the data is not
+fixed — it sharpens with every simulation, concentrating experience
+where value estimates say it matters.
+
+The unifying observation for our project: ISMCTS with terminal-only
+rewards (ADR-004) sits at the "pure Monte Carlo" end of the
+bootstrapping axis. If Phase 4 ever introduces truncated rollouts
+with heuristic leaf evaluation (ADR-003 leaves the door open), we
+would be moving one notch toward the TD end — importing bootstrap
+bias in exchange for shorter, cheaper simulations. Knowing where
+each variant sits on the taxonomy makes that trade-off explicit
+instead of accidental.
 
 ---
 

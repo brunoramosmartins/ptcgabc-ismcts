@@ -31,6 +31,11 @@ schema and rationale per idea.
   the true state (no determinization) to measure the ceiling that any
   imperfect-information algorithm can achieve. Gates every belief-
   based idea below. Phase 3 addendum.
+- **pimc-baseline-determinized-uct** — PIMC (independent per-
+  determinization UCT + vote) as a fourth arm in the same Phase 3
+  diagnostic run. Decomposes the gap: $W_{\text{ISMCTS}} -
+  W_{\text{PIMC}}$ measures the value of the shared info-set tree
+  (Cowling's claim) in PTCG specifically. Interpretive, not gating.
 - **informed-determinization** — replace uniform $P(h \mid I)$ with a
   distribution informed by public evidence (deck lists, discard,
   board state). Gated on the oracle baseline: pursue only if the

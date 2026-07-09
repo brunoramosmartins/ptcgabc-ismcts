@@ -95,3 +95,30 @@ slots now.
 
 These are captured to keep the "what could come next" surface
 documented; no commitment implied.
+
+---
+
+## Post-competition reading track — neural MCTS lineage
+
+Surfaced during Phase 2 study discussions as a natural continuation of
+the Browne → Cowling → Long arc, but **deliberately excluded from the
+competition roadmap**: it conflicts with ADR-003 (no learned
+evaluator within the competition), with the hard deadlines (Aug 16-17
+Simulation, Sep 13 Strategy), and with the Kaggle worker constraints
+(no GPU). Reading order for after `v1.0.0`:
+
+1. **Kocsis & Szepesvári (2006)** — the original UCT paper. The
+   derivations in `exercises/ex02_mcts_derivations.md` already cover
+   the core results; reading the original closes the loop on the
+   proofs sketched there.
+2. **AlphaGo (Silver et al. 2016)** — policy/value networks + PUCT.
+   The first "learned components replace handcrafted rollouts" system.
+3. **AlphaZero (Silver et al. 2017)** — removes domain knowledge and
+   human data; pure self-play.
+4. **MuZero (Schrittwieser et al. 2020)** — removes the explicit
+   simulator; learns dynamics, reward, and representation.
+
+Each pairs naturally with a small artifact from the board-game track
+above (e.g., AlphaZero-style tic-tac-toe already sits in the parking
+lot). If pursued, one reading-companion note per paper following the
+Phase 2 template.

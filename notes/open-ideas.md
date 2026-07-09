@@ -509,15 +509,18 @@ $\Delta_{\text{ceiling}}$ using the shared seeds.
 
 **Literature.**
 
-- **Long, Sturtevant, Buro & Furtak (2010).** Direct methodological
-  precedent — uses a cheating perfect-information search as the
-  reference against which non-cheating PIMC is measured, and
-  introduces the three properties (leaf correlation, bias,
-  disambiguation) that predict how large the gap will be. Reading
-  companion in
+- **Long, Sturtevant, Buro & Furtak (2010).** Methodological
+  precedent for the *shape* of the experiment, with one nuance found
+  on close reading: Long's reference player is a **CFR-approximated
+  equilibrium** (plus a best-response player in Kuhn Poker), not a
+  cheating UCT. Both constructions serve the same role — an upper
+  bound assuming the hidden-information problem is solved — but the
+  implementation differs. Long's real contribution to our experiment
+  is the three properties (leaf correlation, bias, disambiguation)
+  that *predict* how large the gap will be. Reading companion in
   [`phase2-long-2010-notes.md`](phase2-long-2010-notes.md); §3.2 and
-  §4.2 of that file calibrate our decision thresholds against the
-  empirical ranges Long reports.
+  §4.2 register the calibration and our priors (prediction: medium
+  gap, 5–15 pp).
 - **Cowling et al. (2012).** The ISMCTS paper's experimental section
   uses Cheating UCT as an oracle upper bound
   ([`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md)
@@ -562,6 +565,98 @@ $\Delta_{\text{ceiling}}$ using the shared seeds.
 - **idea** — 2026-07 (raised after Cowling reading; direct
   consequence of "measure headroom before optimizing" methodology
   from Long et al. 2010).
+
+---
+
+### pimc-baseline-determinized-uct — PIMC as a fourth experimental arm
+
+**Motivation.**
+
+Our current diagnostic ladder has four agents: Random → Heuristic →
+ISMCTS → Oracle (cheating UCT). It is missing the one arm that
+directly tests Cowling's central claim in *our* domain: **PIMC
+(Determinized UCT)** — sample $K$ determinizations, run an independent
+perfect-information UCT on each, and pick the action by majority vote
+or averaged root statistics.
+
+With PIMC in the ladder, the total gap decomposes into three
+interpretable pieces:
+
+- $W_{\text{PIMC}} - W_{\text{heuristic}}$ — the value of *search*
+  (any tree search over none).
+- $W_{\text{ISMCTS}} - W_{\text{PIMC}}$ — the value of the *shared
+  information-set tree* specifically. This is Cowling's contribution,
+  measured in PTCG. Per Cowling's own Dou Di Zhu result, this delta
+  can be $\approx 0$ when branching is high — so this is a genuine
+  empirical question, not a formality.
+- $W_{\text{cheat}} - W_{\text{ISMCTS}}$ — the remaining cost of
+  hidden information ($\Delta_{\text{ceiling}}$, the quantity the
+  oracle-baseline entry defines).
+
+Per Long's framework, if PTCG has high leaf correlation and fast
+disambiguation, the middle delta will be small — and knowing that
+*before* Phase 5 prevents us from over-investing in info-set-specific
+machinery. Registered prediction (Long notes §4.2): medium
+disambiguation, moderately high correlation, so the middle delta is
+expected to be positive but modest.
+
+**Formal statement.**
+
+PIMC agent: at each decision, sample $K$ determinizations
+$h_1, \dots, h_K \sim P(h \mid I)$ (uniform). For each $h_k$, run an
+independent perfect-information UCT with budget $B/K$ (so total budget
+$B$ matches the ISMCTS arm). Select the action
+
+$$
+a^* \;=\; \operatorname*{arg\,max}_a \; \sum_{k=1}^{K} n_k(a),
+$$
+
+the action with the highest total root visit count across the $K$
+trees (visit-count voting). All other components (UCB1 constant,
+rollout policy, reward) identical to the ISMCTS arm.
+
+**Literature.**
+
+- **Cowling et al. (2012)** — Determinized UCT is precisely the
+  baseline the paper compares ISMCTS against; see
+  [`phase2-ismcts-paper-notes.md`](phase2-ismcts-paper-notes.md) §5.1
+  and §5.3 (Dou Di Zhu: ISMCTS ≈ PIMC under extreme branching).
+- **Long et al. (2010)** — predicts when this arm will be close to
+  ISMCTS (high correlation / fast disambiguation) — see
+  [`phase2-long-2010-notes.md`](phase2-long-2010-notes.md) §5.1.
+- **Ginsberg (1999)** — GIB is the canonical PIMC success story.
+
+**Where in the roadmap.**
+
+- **Phase 3 addendum, same experiment as the oracle baseline.** Once
+  ISMCTS exists, PIMC is nearly free: it reuses the UCT loop and the
+  determinization sampler; the only new code is the "K independent
+  trees + vote" wrapper (~half a day). Run all four arms (heuristic
+  reference, PIMC, ISMCTS, cheating UCT) on the same 200 paired seeds
+  in one experiment.
+- Does **not** gate anything (unlike the oracle arm) — it's
+  interpretive. But it shares the run, so bundling costs nothing.
+- **Not a submission candidate** in Phase 3–4 (ISMCTS is the
+  committed algorithm per ADR-001). If the middle delta turns out
+  negative (PIMC beats ISMCTS in PTCG!), that's an important negative
+  result for the writeup and would trigger an amendment discussion.
+
+**Risk to scope.**
+
+- **Cost:** ~0.5 day on top of the oracle-baseline work.
+- **Descope path:** if Phase 3 runs late, drop this arm and run only
+  ISMCTS vs oracle; the middle decomposition is lost but the gating
+  decision (ceiling gap) survives.
+- **Budget-splitting caveat:** $B/K$ per tree vs one tree with budget
+  $B$ is itself a design choice that affects the comparison. Pin $K$
+  in the registry entry (Cowling uses comparable constructions;
+  choose $K \in \{10, 20, 40\}$ after measuring per-simulation cost).
+
+**Status.**
+
+- **idea** — 2026-07 (surfaced while consolidating the Phase 2
+  reading synthesis; completes the experimental ladder suggested by
+  the Long/Cowling pairing).
 
 ---
 
