@@ -147,6 +147,73 @@ payload (documented Python API wraps it as
 confirms it empirically and also measures ms/step inside the search —
 the number that actually budgets H3.
 
+### Probe v2 measurements (2026-07) — all unknowns closed
+
+Payload schema confirmed:
+`{"error": code, "state": {"observation": {...}, "searchId": id}}`.
+SearchBegin **injects the caller's determinization verbatim** (the
+sampled prize cards appeared in the returned state) — the whole
+mechanism works.
+
+Timing on the author's WSL2 machine, random rollouts inside one search
+session (mirror deck, turn-2 root):
+
+| Metric | Value |
+|---|---|
+| per `search_step` | **~0.12 ms** |
+| steps per rollout (median) | ~93 |
+| per full rollout | **~11 ms** |
+| rollouts per 10 s | **~930** |
+| real battle after searching | **intact** |
+
+Implications: at ~20 s/decision available under the 10-min match
+budget, roughly **1,800 full-rollout simulations per decision** are
+feasible — comfortably above the 300–1,500 root-convergence floor
+estimated in `exercises/ex02_mcts_derivations.md` Ex 02.5. The public
+notebook's 10 sims/decision reflects its NN-evaluation cost, not an
+engine limit. H3's sweep range should start well below ~1,000 and
+cross it (e.g. 30 / 100 / 300 / 1,000 / 3,000) to catch the
+budget-binding breakpoint from both sides.
+
+### Smoke test result (2026-07) — Issue #19 DoD met
+
+`scripts/smoke_ismcts.py 200`: full ISMCTS-vs-heuristic match
+completed, 17 decisions (6 by ISMCTS), **zero fallbacks**, median
+**0.77 s per ISMCTS decision at 200 iterations** (~3.9 ms per full
+iteration: determinize + search_begin + tree descent + rollout).
+Extrapolation: ~700 decisions at this cost fit a 9-minute budget;
+with ~30–40 ISMCTS decisions per match, iteration counts of ~2,000
+per decision remain affordable. Outcome printed for debugging only,
+not recorded (pre-registration guardrail).
+
+### Open issue: intermittent SearchBegin error 2
+
+The first smoke attempt failed with engine error code 2 (not among
+Export.cpp's own codes 1/30/99 — it originates inside
+`ApiSearchBegin`). A 2×2 discriminator
+(`scripts/debug_search_begin.py`: {setup, mid-game} × {crude,
+consistent}) then passed **all four cells**, and the re-run smoke
+passed with zero fallbacks — so the failure is state-dependent and
+intermittent, not phase- or content-systematic.
+
+Working hypothesis: the engine validates the supplied determinization
+against **revealed information** it knows we have seen. The prime
+suspect is a mulligan: when the opponent mulligans during setup, their
+redrawn hand is revealed to us; a uniformly sampled `enemy_hand` that
+contradicts the reveal would be rejected. Mulligans are random across
+matches, which fits the intermittency. (If confirmed, the fix is to
+fold revealed cards into the determinizer as hard constraints —
+which is informed-determinization option 1 arriving earlier than
+planned.)
+
+Mitigation already in place: `ISMCTSAgent` falls back to the
+first-`maxCount` heuristic choice for a decision whose SearchBegin is
+rejected, recording the event in `fallback_events`. Every EXP run
+must report the fallback count; a nonzero count outside setup turns
+is a validity flag. Next repro attempt: loop smoke matches until a
+mulligan occurs and inspect the failing observation's log for reveal
+events.
+
 ### Findings from the top public notebook (2026-07)
 
 The most-voted public notebook on the competition confirmed everything
