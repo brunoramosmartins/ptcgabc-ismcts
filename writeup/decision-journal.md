@@ -127,3 +127,60 @@ Closed all five Phase 1 deliverables in one sitting.
 ## Failed Attempts
 
 _(filled if any come up during Phase 1.)_
+
+---
+
+## Week 3 (14 Jul – 20 Jul 2026) — Phase 2 & 3
+
+### 2026-07-09 — H1 pre-registered and tested; the validity flag paid off
+
+Phase 2 closed (hypotheses H1–H4 LOCKED, tag `v0.3-hypotheses`) and the
+SO-ISMCTS core shipped. Then the first pre-registered hypothesis went to
+test.
+
+**Result.** EXP-003 (ISMCTS vs heuristic, N = 500 paired seeds, 1000
+iterations/decision): **390W–110L, win rate 0.780, Wilson 95% CI
+[0.742, 0.814]**. H1 SUPPORTED — lower bound clears 0.5 by ~24 pp.
+
+**Why this result is trustworthy, and it nearly wasn't.** The
+determinizer's fail-loud accounting plus the agent's fallback counter
+(both built before the experiment) caught a real defect the pilot runs
+surfaced: our determinization was systematically off by one card
+whenever a Trainer was mid-resolution or our own active was face-down
+during setup, and the unrevealed enemy active could be sampled as an
+illegal non-Basic. Three instrumented pilots (fallbacks 29 → 15 → 0)
+diagnosed and fixed all of it. Had we skipped the validity flag and run
+straight to N = 500, we'd have measured an ISMCTS/heuristic hybrid and
+never known — 6 hours of invalid data presented as a clean result. The
+research infrastructure was not overhead; it was the difference between
+a real finding and a fake one. (This is the concrete instance of the
+synthesis Lessons-Learned claim that "research infrastructure is part
+of the contribution.")
+
+**What the result does NOT say.** This is a local head-to-head, not the
+Kaggle ladder, and it does not explain *why* ISMCTS wins — is it the
+value of search per se, the shared info-set tree specifically, or
+something the heuristic simply lacks? That decomposition is the
+diagnostic ladder's job (PIMC + oracle arms), next up.
+
+**Operational note.** The run survived two mid-execution reboots
+losslessly because the local ladder flushes one JSON line per match.
+Resumed by pointing `--seed-start` at the next seed and merging the
+parts. Also logged a personal error worth remembering: I cannot check a
+WSL process's liveness with `ps` from the Windows-side shell — different
+process namespaces; only the growing output file proves the run is
+alive.
+
+## Failed Attempts
+
+- **Determinizer off-by-one (contextCard / limbo cards).** First fix
+  swept the whole `select` subtree, which over-corrected by
+  double-counting `select.deck` (deck-browse effects). Narrowed to
+  `select.contextCard` only, plus a `POOL_SLACK = 2` tolerance for
+  genuinely unidentifiable limbo cards (our face-down setup active; a
+  Trainer mid-resolution). Fixed across pilots v1–v4.
+- **Illegal enemy active (SearchBegin error 2).** The unrevealed
+  opponent active was sampled uniformly and could land on an
+  Energy/Trainer — an invalid board state the engine rejected. Fixed by
+  filtering that slot to Basic Pokémon via the engine's `AllCard`
+  database.
