@@ -103,10 +103,53 @@ def _int_array(ids: list[int]) -> ctypes.Array:
     return (ctypes.c_int * max(len(ids), 1))(*(ids or [0]))
 
 
+class SearchApiError(RuntimeError):
+    """Raised when SearchBegin/SearchStep return an engine error code.
+
+    Known codes (from Export.cpp): 1 = invalid card ID in a
+    determinization array, 30 = wrong handle type, 99 = internal
+    engine exception.
+    """
+
+    def __init__(self, fn: str, code: int) -> None:
+        super().__init__(f"{fn} failed with engine error code {code}")
+        self.code = code
+
+
 def _parse(raw: bytes | None, fn: str) -> dict[str, Any]:
     if not raw:
         raise RuntimeError(f"{fn} returned NULL")
     return json.loads(raw.decode("utf-8"))
+
+
+def _unwrap(raw: bytes | None, fn: str) -> dict[str, Any]:
+    """Decode a SearchBegin/SearchStep payload.
+
+    Payload schema (confirmed empirically 2026-07):
+    ``{"error": code, "state": {"observation": {...}, "searchId": id}}``
+
+    Returns:
+        ``{"observation": <obs dict>, "search_id": <int>}``
+
+    Raises:
+        SearchApiError: If the engine reports a nonzero error code.
+    """
+    payload = _parse(raw, fn)
+    code = payload.get("error") or 0
+    if code:
+        raise SearchApiError(fn, code)
+    state = payload.get("state") or {}
+    if "observation" not in state:
+        raise RuntimeError(
+            f"{fn}: unexpected payload shape; "
+            f"top-level={sorted(payload)}, state={sorted(state)}"
+        )
+    search_id = state.get("searchId")
+    if search_id is None:
+        raise RuntimeError(
+            f"{fn}: no searchId in state; state keys={sorted(state)}"
+        )
+    return {"observation": state["observation"], "search_id": search_id}
 
 
 def expected_counts(obs: dict) -> dict[str, int]:
@@ -159,11 +202,13 @@ def search_begin(
             controlled (chance-node hook; unused in the baseline).
 
     Returns:
-        The decoded JSON payload (new observation + search id).
+        ``{"observation": <obs dict>, "search_id": <int>}``.
 
     Raises:
         ValueError: If the blob is missing or any array length does
             not match what the reconstructed state will require.
+        SearchApiError: If the engine rejects the call (e.g. code 1,
+            an invalid card ID in a determinization array).
     """
     blob = obs.get("search_begin_input")
     if not blob:
@@ -185,15 +230,19 @@ def search_begin(
         _int_array(enemy_hand), _int_array(enemy_active),
         int(manual_coin),
     )
-    return _parse(raw, "SearchBegin")
+    return _unwrap(raw, "SearchBegin")
 
 
 def search_step(search_id: int, select: list[int]) -> dict[str, Any]:
-    """Advance a search state by applying one selection."""
+    """Advance a search state by applying one selection.
+
+    Returns:
+        ``{"observation": <obs dict>, "search_id": <new id>}``.
+    """
     _declare()
     arr = (ctypes.c_int * len(select))(*select)
     raw = lib.SearchStep(agent_handle(), search_id, arr, len(select))
-    return _parse(raw, "SearchStep")
+    return _unwrap(raw, "SearchStep")
 
 
 def search_end() -> None:

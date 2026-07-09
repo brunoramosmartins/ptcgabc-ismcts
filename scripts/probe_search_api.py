@@ -1,12 +1,15 @@
-"""Probe the native search API end-to-end with real signatures.
+"""Probe the native search API end-to-end (v2 — schema confirmed).
 
-Signatures come from the engine's Export.cpp (see
-`env/search_engine.py`); the one remaining unknown is the JSON schema
-returned by SearchBegin/SearchStep. This script starts a battle, plays
-a few random moves, opens a search with a notebook-style crude
-determinization (own cards sampled from the deck list, opponent filled
-with dummies — schema discovery only, NOT our real determinizer), and
-prints everything.
+v1 discovered the payload schema:
+``{"error": code, "state": {"observation": {...}, "searchId": id}}``
+and proved SearchBegin injects the caller's determinization (the
+sampled prizes appeared verbatim in the returned state). v2 runs
+against the normalized wrapper in `env/search_engine.py` and answers
+the two remaining questions automatically:
+
+1. ms per `search_step` — the number that budgets simulations per
+   decision (H3).
+2. Does the real battle survive a search session untouched?
 
 Run and paste the full output:
 
@@ -19,6 +22,7 @@ import ctypes
 import json
 import pathlib
 import random
+import statistics
 import sys
 import time
 
@@ -47,6 +51,36 @@ def read_obs(ptr: int) -> dict:
     return o
 
 
+def crude_determinization(obs: dict, deck: list[int]) -> dict:
+    """Notebook-style filler — schema/timing probe only, not our sampler."""
+    c = expected_counts(obs)
+    return {
+        "my_deck": rng.sample(deck, c["my_deck"]),
+        "my_prize": rng.sample(deck, c["my_prize"]),
+        "enemy_deck": [SNORLAX] * c["enemy_deck"],
+        "enemy_prize": [BASIC_ENERGY] * c["enemy_prize"],
+        "enemy_hand": [BASIC_ENERGY] * c["enemy_hand"],
+        "enemy_active": [SNORLAX] * c["enemy_active"],
+    }
+
+
+def rollout_to_terminal(state: dict, cap: int = 3000) -> tuple[int, float, int]:
+    """Random rollout inside the search; returns (steps, seconds, result)."""
+    sid, obs = state["search_id"], state["observation"]
+    steps = 0
+    t0 = time.perf_counter()
+    while steps < cap:
+        cur = obs["current"]
+        if cur["result"] != -1:
+            return steps, time.perf_counter() - t0, cur["result"]
+        sel = obs["select"]
+        choice = rng.sample(range(len(sel["option"])), sel["maxCount"])
+        nxt = search_step(sid, choice)
+        sid, obs = nxt["search_id"], nxt["observation"]
+        steps += 1
+    return steps, time.perf_counter() - t0, -1
+
+
 def main() -> int:
     deck = [int(x) for x in
             (REPO_ROOT / "decks" / "selected" / "deck.csv")
@@ -56,7 +90,7 @@ def main() -> int:
     ptr = sim.lib.BattleStart(arg).battlePtr
 
     section("1. Advance the real battle a few random steps")
-    for i in range(6):
+    for _ in range(6):
         o = read_obs(ptr)
         if o["current"]["result"] != -1 or o.get("select") is None:
             break
@@ -65,88 +99,46 @@ def main() -> int:
         c_arr = (ctypes.c_int * len(choice))(*choice)
         sim.lib.Select(ptr, c_arr, len(choice))
     o = read_obs(ptr)
-    print(f"turn={o['current']['turn']}  yourIndex={o['current']['yourIndex']}  "
+    real_turn = o["current"]["turn"]
+    print(f"turn={real_turn}  yourIndex={o['current']['yourIndex']}  "
           f"blob_len={len(o['search_begin_input'])}")
-    counts = expected_counts(o)
-    print(f"expected determinization counts: {counts}")
+    print(f"expected counts: {expected_counts(o)}")
 
-    section("2. SearchBegin with a crude (schema-probe) determinization")
-    payload = search_begin(
-        o,
-        my_deck=rng.sample(deck, counts["my_deck"]),
-        my_prize=rng.sample(deck, counts["my_prize"]),
-        enemy_deck=[SNORLAX] * counts["enemy_deck"],
-        enemy_prize=[BASIC_ENERGY] * counts["enemy_prize"],
-        enemy_hand=[BASIC_ENERGY] * counts["enemy_hand"],
-        enemy_active=[SNORLAX] * counts["enemy_active"],
-    )
-    print(f"top-level keys: {sorted(payload.keys())}")
-    print("raw payload (first 1500 chars):")
-    print(json.dumps(payload)[:1500])
+    section("2. SearchBegin — normalized wrapper")
+    state = search_begin(o, **crude_determinization(o, deck))
+    print(f"search_id: {state['search_id']}")
+    inner = state["observation"]
+    print(f"observation keys: {sorted(inner.keys())}")
+    print(f"select options: {len(inner['select']['option'])}, "
+          f"turn={inner['current']['turn']}, "
+          f"result={inner['current']['result']}")
 
-    def find_search_id(d: dict):
-        for k in ("searchId", "search_id", "id"):
-            if k in d:
-                return d[k], k
-        return None, None
-
-    sid, key = find_search_id(payload)
-    print(f"\nsearch id: {sid} (key: {key!r})")
-    sel = payload.get("select") or (payload.get("observation") or {}).get("select")
-    print(f"select present: {sel is not None}; "
-          f"options: {len(sel['option']) if sel else 'n/a'}")
-
-    if sid is None or sel is None:
-        section("ABORT — schema differs from expectation; paste output")
-        return 1
-
-    section("3. SearchStep x3 + timing")
-    t0 = time.perf_counter()
-    steps = 0
-    for _ in range(3):
-        choice = rng.sample(range(len(sel["option"])), sel["maxCount"])
-        payload = search_step(sid, choice)
-        sid2, _ = find_search_id(payload)
-        sel = payload.get("select") or (payload.get("observation") or {}).get("select")
-        cur = payload.get("current") or (payload.get("observation") or {}).get("current")
-        result = cur["result"] if cur else "?"
-        print(f"  step: id {sid} -> {sid2}, result={result}, "
-              f"options={len(sel['option']) if sel else None}")
-        steps += 1
-        if sid2 is None or sel is None:
-            break
-        sid = sid2
-    dt = time.perf_counter() - t0
-    print(f"  {steps} steps in {dt * 1000:.2f} ms "
-          f"({dt / max(steps, 1) * 1000:.2f} ms/step)")
-
-    section("4. Rollout to terminal inside the search + timing")
-    t0 = time.perf_counter()
-    n = 0
-    while n < 2000:
-        cur = payload.get("current") or (payload.get("observation") or {}).get("current")
-        sel = payload.get("select") or (payload.get("observation") or {}).get("select")
-        if cur and cur["result"] != -1:
-            print(f"  terminal after {n} steps: result={cur['result']}")
-            break
-        if sel is None:
-            print(f"  select=None at step {n} (non-terminal?) — paste output")
-            break
-        choice = rng.sample(range(len(sel["option"])), sel["maxCount"])
-        payload = search_step(sid, choice)
-        sid, _ = find_search_id(payload)
-        n += 1
-    dt = time.perf_counter() - t0
-    print(f"  rollout: {n} steps in {dt:.3f}s "
-          f"({dt / max(n, 1) * 1000:.2f} ms/step)")
+    section("3. Rollouts to terminal inside one search session")
+    rollouts = []
+    for i in range(5):
+        st = search_begin(o, **crude_determinization(o, deck)) if i else state
+        steps, dt, result = rollout_to_terminal(st)
+        per = dt / steps * 1000 if steps else float("nan")
+        print(f"  rollout {i}: {steps:4d} steps, {dt:6.3f}s "
+              f"({per:5.2f} ms/step), result={result}")
+        rollouts.append((steps, dt))
+    good = [(s, d) for s, d in rollouts if s > 0]
+    if good:
+        med_steps = statistics.median(s for s, _ in good)
+        med_ms = statistics.median(d / s * 1000 for s, d in good)
+        med_s = statistics.median(d for _, d in good)
+        print(f"  median: {med_steps} steps/rollout, {med_ms:.2f} ms/step, "
+              f"{med_s:.3f} s/rollout")
+        print(f"  → rollouts per 10s decision budget: ~{10 / med_s:.0f}")
 
     search_end()
     print("SearchEnd ok")
 
-    section("5. Is the REAL battle still intact after searching?")
+    section("4. Is the REAL battle intact after searching?")
     o2 = read_obs(ptr)
-    print(f"real battle readable: turn={o2['current']['turn']}, "
-          f"result={o2['current']['result']} (should match section 1)")
+    print(f"turn={o2['current']['turn']} (was {real_turn}), "
+          f"result={o2['current']['result']} — "
+          f"{'INTACT' if o2['current']['turn'] == real_turn else 'CORRUPTED'}")
     sim.lib.BattleFinish(ptr)
 
     section("DONE — paste everything above back into the chat")
