@@ -738,6 +738,12 @@ CIs. Note ISMCTS's determinizer already supports asymmetric lists
 
 - **idea** — 2026-07 (raised by Bruno after watching ladder replays:
   "o deck dos adversários é diferente — exploramos outros decks?").
+- **in progress (Phase 4)** — 2026-07-10: `scripts/local_ladder.py`
+  now takes `--deck-a` / `--deck-b` (builder contract passes both true
+  lists, so consistency holds in asymmetric matchups);
+  `scripts/analyze_card_pool.py` surveys the pool. Round-robin process
+  documented in `notes/phase4-deck-selection.md`. The Phase-5
+  exploratory question (per-matchup H1 check) remains open.
 
 ---
 

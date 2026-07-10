@@ -21,6 +21,7 @@ from scripts.local_ladder import (
 
 
 DECK = [1000 + i for i in range(60)]
+DECK_B = [2000 + i for i in range(60)]
 
 
 def test_agent_registry_has_all_arms() -> None:
@@ -36,24 +37,36 @@ def test_sign_helper() -> None:
 
 
 def test_wrap_for_cabt_returns_deck_on_initial_call() -> None:
-    agent = AGENT_REGISTRY["heuristic"](1, DECK, 10)
+    agent = AGENT_REGISTRY["heuristic"](1, DECK, DECK, 10)
     fn = _wrap_for_cabt(agent, DECK)
     assert fn({"select": None}) == DECK
 
 
 def test_wrap_for_cabt_delegates_to_choose() -> None:
-    agent = AGENT_REGISTRY["heuristic"](1, DECK, 10)
+    agent = AGENT_REGISTRY["heuristic"](1, DECK, DECK, 10)
     fn = _wrap_for_cabt(agent, DECK)
     obs = {"select": {"option": [{"x": 0}, {"x": 1}, {"x": 2}], "minCount": 1, "maxCount": 2}}
     assert fn(obs) == [0, 1]
 
 
 def test_ismcts_builder_wires_config() -> None:
-    agent = AGENT_REGISTRY["ismcts"](7, DECK, 123)
+    agent = AGENT_REGISTRY["ismcts"](7, DECK, DECK, 123)
     assert agent.my_deck_list == DECK
     assert agent.opponent_deck_list == DECK   # mirror match
     assert agent.iterations == 123
     assert agent.fallback_events == []
+
+
+def test_ismcts_builder_asymmetric_decks() -> None:
+    agent = AGENT_REGISTRY["ismcts"](7, DECK, DECK_B, 123)
+    assert agent.my_deck_list == DECK
+    assert agent.opponent_deck_list == DECK_B
+
+
+def test_pimc_builder_asymmetric_decks() -> None:
+    agent = AGENT_REGISTRY["pimc"](7, DECK, DECK_B, 123)
+    assert agent.my_deck_list == DECK
+    assert agent.opponent_deck_list == DECK_B
 
 
 def test_summarize_empty_rows() -> None:

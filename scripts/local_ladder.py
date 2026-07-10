@@ -49,53 +49,61 @@ from agents.pimc_agent import PIMCAgent  # noqa: E402
 from agents.random_agent import RandomAgent  # noqa: E402
 from stats.wilson import wilson_interval  # noqa: E402
 
-# Builder contract: (seed, deck, iterations) -> Agent. Deterministic
+# Builder contract: (seed, my_deck, opp_deck, iterations) -> Agent.
+# Locally BOTH lists are known (we set both seats), so search agents get
+# the opponent's real list even in asymmetric matchups. Deterministic
 # agents ignore what they don't need.
-AgentBuilder = Callable[[int, list[int], int], Agent]
+AgentBuilder = Callable[[int, list[int], list[int], int], Agent]
 
 
-def _random_builder(seed: int, deck: list[int], iterations: int) -> Agent:
-    del deck, iterations
+def _random_builder(seed: int, my_deck: list[int], opp_deck: list[int],
+                    iterations: int) -> Agent:
+    del my_deck, opp_deck, iterations
     return RandomAgent(rng=random.Random(seed))
 
 
-def _heuristic_builder(seed: int, deck: list[int], iterations: int) -> Agent:
-    del seed, deck, iterations  # deterministic; uniform builder signature
+def _heuristic_builder(seed: int, my_deck: list[int], opp_deck: list[int],
+                       iterations: int) -> Agent:
+    del seed, my_deck, opp_deck, iterations  # deterministic
     return HeuristicAgent()
 
 
-def _ismcts_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+def _ismcts_builder(seed: int, my_deck: list[int], opp_deck: list[int],
+                    iterations: int) -> Agent:
     return ISMCTSAgent(
-        my_deck_list=deck,
-        opponent_deck_list=deck,   # mirror matches: the list is known
+        my_deck_list=my_deck,
+        opponent_deck_list=opp_deck,
         iterations=iterations,
         rng=random.Random(seed),
     )
 
 
-def _pimc_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+def _pimc_builder(seed: int, my_deck: list[int], opp_deck: list[int],
+                  iterations: int) -> Agent:
     return PIMCAgent(
-        my_deck_list=deck,
-        opponent_deck_list=deck,   # mirror matches: the list is known
+        my_deck_list=my_deck,
+        opponent_deck_list=opp_deck,
         iterations=iterations,
         rng=random.Random(seed),
     )
 
 
-def _oracle_builder(seed: int, deck: list[int], iterations: int) -> Agent:
-    del deck  # the oracle reads the true state from the visualizer
+def _oracle_builder(seed: int, my_deck: list[int], opp_deck: list[int],
+                    iterations: int) -> Agent:
+    del my_deck, opp_deck  # the oracle reads the true state
     return OracleAgent(iterations=iterations, rng=random.Random(seed))
 
 
-def _ismcts_guided_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+def _ismcts_guided_builder(seed: int, my_deck: list[int],
+                           opp_deck: list[int], iterations: int) -> Agent:
     from evaluator.heuristic import MoveScorer
     from evaluator.rollout import make_guided_rollout
     from search.determinize import basic_pokemon_ids
 
     scorer = MoveScorer(basic_ids=basic_pokemon_ids())
     return ISMCTSAgent(
-        my_deck_list=deck,
-        opponent_deck_list=deck,   # mirror matches: the list is known
+        my_deck_list=my_deck,
+        opponent_deck_list=opp_deck,
         iterations=iterations,
         rng=random.Random(seed),
         rollout_policy=make_guided_rollout(scorer),
@@ -131,7 +139,8 @@ def _wrap_for_cabt(agent: Agent, deck: list[int]) -> Callable[[dict], list[int]]
 def run_match(
     builder_a: AgentBuilder,
     builder_b: AgentBuilder,
-    deck: list[int],
+    deck_a: list[int],
+    deck_b: list[int],
     seed: int,
     iterations: int,
 ) -> dict:
@@ -141,11 +150,11 @@ def run_match(
     from kaggle_environments import make
 
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
-    agent_a = builder_a(seed, deck, iterations)
-    agent_b = builder_b(seed, deck, iterations)
+    agent_a = builder_a(seed, deck_a, deck_b, iterations)
+    agent_b = builder_b(seed, deck_b, deck_a, iterations)
 
     t0 = time.perf_counter()
-    env.run([_wrap_for_cabt(agent_a, deck), _wrap_for_cabt(agent_b, deck)])
+    env.run([_wrap_for_cabt(agent_a, deck_a), _wrap_for_cabt(agent_b, deck_b)])
     seconds = time.perf_counter() - t0
 
     reward_a = env.state[0]["reward"]
@@ -219,7 +228,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         "--deck",
         type=pathlib.Path,
         default=REPO_ROOT / "decks" / "selected" / "deck.csv",
+        help="Deck for BOTH seats (mirror). Overridden per seat by "
+             "--deck-a / --deck-b.",
     )
+    p.add_argument("--deck-a", type=pathlib.Path, default=None)
+    p.add_argument("--deck-b", type=pathlib.Path, default=None)
     p.add_argument(
         "--out",
         type=pathlib.Path,
@@ -231,7 +244,8 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    deck = _load_deck(args.deck)
+    deck_a = _load_deck(args.deck_a or args.deck)
+    deck_b = _load_deck(args.deck_b or args.deck)
     builder_a = AGENT_REGISTRY[args.agent_a]
     builder_b = AGENT_REGISTRY[args.agent_b]
 
@@ -243,7 +257,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         for offset in range(args.matches):
             seed = args.seed_start + offset
-            row = run_match(builder_a, builder_b, deck, seed, args.iterations)
+            row = run_match(builder_a, builder_b, deck_a, deck_b, seed,
+                            args.iterations)
             row["agent_a"] = args.agent_a
             row["agent_b"] = args.agent_b
             rows.append(row)
