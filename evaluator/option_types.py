@@ -1,29 +1,40 @@
 """Engine option-type codes used by the move scorer.
 
-PROVISIONAL — confirmed vs inferred. The engine encodes each legal
-option as ``{"type": <int>, ...}``. Codes marked CONFIRMED were
-directly observed in probe payloads; the rest are inferred from the
-public notebook's OptionType case ordering and MUST be verified by
-`scripts/probe_option_types.py` before any H2 experiment runs. If the
-probe disagrees, fix the constants here — every consumer imports from
-this module.
+CONFIRMED by `scripts/probe_option_types.py` (30 random games,
+2026-07-10) — every code below was either directly observed with its
+field signature or is marked as never-observed. If the engine version
+changes, re-run the probe.
 
-Observed evidence (probe_search_api / debug_search_begin, 2026-07):
-- setup Yes/No select → options {"type": 1} / {"type": 2}
-- hand energies → {"type": 8, "area": 2, "index": i, "inPlayArea": 4,
-  "inPlayIndex": 0} (attach from HAND to ACTIVE)
-- hand trainers → {"type": 7, "index": i} (play from hand)
-- lone proceed option → {"type": 14}
+Observed signatures:
+
+| code | fields                                       | meaning        |
+|------|----------------------------------------------|----------------|
+| 0    | number                                       | NUMBER pick    |
+| 1    | (bare)  — setup Yes/No selects               | YES            |
+| 2    | (bare)                                       | NO             |
+| 3    | area, index, playerIndex                     | CARD pick      |
+| 6    | area, index, playerIndex, energyIndex, count | ENERGY pick    |
+| 7    | index                                        | PLAY from hand |
+| 8    | area, index, inPlayArea, inPlayIndex         | ATTACH energy  |
+| 9    | area, index, inPlayArea, inPlayIndex         | EVOLVE         |
+| 12   | (bare) — midgame, ~once per turn             | RETREAT        |
+| 13   | attackId                                     | ATTACK         |
+| 14   | (bare) — the "proceed/pass" option           | END            |
+
+ABILITY was never observed with the Phase-0 placeholder deck (it may
+simply have no activatable abilities); no scorer rule keys on it.
 """
 
 from __future__ import annotations
 
-YES = 1            # CONFIRMED (setup Yes/No)
+NUMBER = 0         # CONFIRMED
+YES = 1            # CONFIRMED
 NO = 2             # CONFIRMED
-ATTACK = 6         # INFERRED — verify (should carry "attackId")
-PLAY = 7           # CONFIRMED (play a card from hand; "index" only)
-ATTACH = 8         # CONFIRMED (energy: area/index → inPlayArea/inPlayIndex)
-EVOLVE = 9         # INFERRED — verify (same field shape as ATTACH)
-ABILITY = 10       # INFERRED — verify
-RETREAT = 12       # INFERRED — verify (likely bare {"type": N})
-END = 14           # CONFIRMED-ish (lone proceed option) — verify
+CARD = 3           # CONFIRMED
+ENERGY = 6         # CONFIRMED (energy pick in sub-selects, NOT attack)
+PLAY = 7           # CONFIRMED
+ATTACH = 8         # CONFIRMED
+EVOLVE = 9         # CONFIRMED
+RETREAT = 12       # CONFIRMED
+ATTACK = 13        # CONFIRMED (carries "attackId")
+END = 14           # CONFIRMED
