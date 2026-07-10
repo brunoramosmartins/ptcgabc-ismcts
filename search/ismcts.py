@@ -125,6 +125,7 @@ def _run_iteration(
     root_index: int,
     c: float,
     rng: random.Random,
+    rollout=None,
 ) -> None:
     """One MCTS iteration on `root` in the determinized world `det`.
 
@@ -134,7 +135,13 @@ def _run_iteration(
     backpropagates the terminal reward. Shared by the ISMCTS (one
     shared root, fresh `det` per call) and PIMC (one root per
     determinization) drivers.
+
+    `rollout` is a callable ``(state, rng) -> result code``; defaults
+    to the uniform-random `_rollout` (ADR-001 baseline). The guided
+    policy from `evaluator/rollout.py` plugs in here (H2 arm).
     """
+    if rollout is None:
+        rollout = _rollout
     state = search_engine.search_begin(obs, **det)
     node, path = root, [root]
     while True:
@@ -151,7 +158,7 @@ def _run_iteration(
             state = search_engine.search_step(state["search_id"], indices)
             child = node.children[key]
             path.append(child)
-            result = _rollout(state, rng)
+            result = rollout(state, rng)
             reward = _terminal_reward(result, root_index)
             break
         maximize = cur["yourIndex"] == root_index
@@ -182,6 +189,7 @@ def decide(
     iterations: int = 1000,
     c: float = DEFAULT_C,
     filler_card: int | None = None,
+    rollout_policy=None,
 ) -> list[int]:
     """Run SO-ISMCTS for one decision; return option indices to play.
 
@@ -198,6 +206,8 @@ def decide(
         iterations: Simulations for this decision.
         c: UCB1 exploration constant.
         filler_card: Fallback for unknown opponent lists (ladder).
+        rollout_policy: ``(state, rng) -> result``; None = uniform
+            random (ADR-001 baseline). Guided policy = H2 arm.
 
     Returns:
         Option indices for the real observation's option array.
@@ -210,7 +220,8 @@ def decide(
         det = sample_determinization(
             obs, my_deck_list, opponent_deck_list, rng, filler_card
         )
-        _run_iteration(root, obs, det, root_index, c, rng)
+        _run_iteration(root, obs, det, root_index, c, rng,
+                       rollout=rollout_policy)
 
     search_engine.search_end()
     return _map_key_to_indices(root.best_action_by_visits(), root_moves)

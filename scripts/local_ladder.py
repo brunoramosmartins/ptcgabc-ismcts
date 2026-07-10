@@ -87,10 +87,26 @@ def _oracle_builder(seed: int, deck: list[int], iterations: int) -> Agent:
     return OracleAgent(iterations=iterations, rng=random.Random(seed))
 
 
+def _ismcts_guided_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    from evaluator.heuristic import MoveScorer
+    from evaluator.rollout import make_guided_rollout
+    from search.determinize import basic_pokemon_ids
+
+    scorer = MoveScorer(basic_ids=basic_pokemon_ids())
+    return ISMCTSAgent(
+        my_deck_list=deck,
+        opponent_deck_list=deck,   # mirror matches: the list is known
+        iterations=iterations,
+        rng=random.Random(seed),
+        rollout_policy=make_guided_rollout(scorer),
+    )
+
+
 AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "random": _random_builder,
     "heuristic": _heuristic_builder,
     "ismcts": _ismcts_builder,
+    "ismcts-guided": _ismcts_guided_builder,   # H2 treatment arm
     "pimc": _pimc_builder,
     "oracle": _oracle_builder,   # LOCAL DIAGNOSTIC ONLY — never submit
 }

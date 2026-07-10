@@ -38,6 +38,7 @@ class ISMCTSAgent(Agent):
         c: float = DEFAULT_C,
         rng: random.Random | None = None,
         filler_card: int | None = None,
+        rollout_policy=None,
     ) -> None:
         self.my_deck_list = my_deck_list
         self.opponent_deck_list = opponent_deck_list
@@ -45,6 +46,7 @@ class ISMCTSAgent(Agent):
         self.c = c
         self.rng = rng or random.Random()
         self.filler_card = filler_card
+        self.rollout_policy = rollout_policy  # None = random (ADR-001)
         self.fallback_events: list[str] = []
 
     def choose(self, obs: dict) -> list[int]:
@@ -57,6 +59,7 @@ class ISMCTSAgent(Agent):
                 iterations=self.iterations,
                 c=self.c,
                 filler_card=self.filler_card,
+                rollout_policy=self.rollout_policy,
             )
         except (SearchApiError, DeterminizationError) as exc:
             turn = (obs.get("current") or {}).get("turn")
