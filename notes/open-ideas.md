@@ -207,6 +207,17 @@ where the expectation is now over the informed distribution.
 - **gated** — 2026-07 (Bruno added the *oracle-baseline-cheating-uct*
   prerequisite after further Cowling reading; now blocked on
   measuring $\Delta_{\text{ceiling}}$).
+- **resolved: dropped for the mirror context** — 2026-07-10. EXP-005
+  measured $\Delta_{\text{ceiling}} = +4.8$ pp (McNemar p = 0.070,
+  n.s.), below the pre-registered ≲ 5 pp drop threshold. Even a
+  perfect belief model buys ≤ ~5 pp over consistent uniform
+  determinization in mirror play — options 1-beyond-consistency and 2
+  are not worth their cost here. **What survives:** the *ladder*
+  problem is different — there the deficit is not belief refinement
+  but the unknown opponent *list* (filler ≪ consistent). Inferring
+  the opponent's deck/archetype to *recover consistency* on the
+  ladder remains open and is now the sharper Phase-5 question (see
+  EXP-005 in the registry).
 
 ---
 
@@ -674,6 +685,59 @@ rollout policy, reward) identical to the ISMCTS arm.
 - **idea** — 2026-07 (surfaced while consolidating the Phase 2
   reading synthesis; completes the experimental ladder suggested by
   the Long/Cowling pairing).
+
+---
+
+### deck-diversity-local-pool — Test agents across matchups, not just mirrors
+
+**Motivation.**
+
+Every local experiment so far (EXP-002a/003/004) is a mirror match:
+both seats play `decks/selected/deck.csv`. That cleanly isolates the
+*algorithm* but measures nothing about *matchup robustness* — while
+the Kaggle ladder, where ratings actually accrue, is all cross-matchup
+(observed while watching replays: every opponent runs a different
+list). This is an external-validity gap already flagged in the Cowling
+notes (§6.1): our conclusions are about mirror play on one placeholder
+deck.
+
+**Formal statement.**
+
+Build a small local deck pool (3–5 archetype-distinct legal lists —
+Phase 4's ADR-002 candidate decks are the natural source). Extend
+`scripts/local_ladder.py` to accept per-seat deck paths
+(`--deck-a` / `--deck-b`) and run the round-robin: agent × deck-pair.
+Report win rate per matchup cell plus the pooled rate, all with Wilson
+CIs. Note ISMCTS's determinizer already supports asymmetric lists
+(`my_deck_list` ≠ `opponent_deck_list`).
+
+**Literature.**
+
+- Long et al. (2010) — domain properties (leaf correlation,
+  disambiguation) may differ by matchup; a mirror measures one point
+  of that space.
+- Cowling et al. (2012) §6.1 notes (our reading) — external validity
+  depends on deck/situation diversity.
+
+**Where in the roadmap.**
+
+- Natural companion to **Phase 4's deck selection (ADR-002)**: the
+  candidate-deck evaluation already requires cross-matchup local
+  play, so the runner extension pays for itself there.
+- As an *experiment*, Phase 5 exploratory (per-matchup H1-style
+  check: does ISMCTS's edge over the heuristic hold across
+  matchups?).
+
+**Risk to scope.**
+
+- Runner extension ~0.5 day. The cost is match volume: a 4-deck pool
+  is 10 pairings × N matches. Mitigate with N = 100/cell for
+  directional reads, reserving N = 500 for the chosen deck.
+
+**Status.**
+
+- **idea** — 2026-07 (raised by Bruno after watching ladder replays:
+  "o deck dos adversários é diferente — exploramos outros decks?").
 
 ---
 

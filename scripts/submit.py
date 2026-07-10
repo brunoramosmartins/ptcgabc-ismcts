@@ -33,7 +33,11 @@ import tempfile
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEFAULT_MAIN = REPO_ROOT / "main.py"
 DEFAULT_DECK = REPO_ROOT / "decks" / "selected" / "deck.csv"
-DEFAULT_OUT = REPO_ROOT / "submission.tar.gz"
+# Built bundles are artifacts, not source: they land in build/ (already
+# gitignored), keeping the repo root clean. Kaggle's "top level"
+# requirement applies to the files INSIDE the archive, not to where the
+# archive itself lives.
+DEFAULT_OUT = REPO_ROOT / "build" / "submission.tar.gz"
 
 BUNDLE_MAX_BYTES = 197 * 1024 * 1024 + int(0.7 * 1024 * 1024)
 
@@ -61,14 +65,50 @@ def _validate_main(main_path: pathlib.Path) -> None:
         raise ValueError(
             f"{main_path} does not define a top-level `agent` function."
         )
+    if "oracle" in src.lower():
+        raise ValueError(
+            f"{main_path} references the oracle — the cheating agent is a "
+            "LOCAL diagnostic and must never be submitted (competition "
+            "rules)."
+        )
+
+
+# Engine modules the ISMCTS shim needs at runtime, bundled preserving
+# their repo-relative package structure so imports work unchanged.
+ENGINE_MODULES = [
+    "env/__init__.py",
+    "env/search_engine.py",
+    "search/__init__.py",
+    "search/determinize.py",
+    "search/node.py",
+    "search/ucb.py",
+    "search/ismcts.py",
+]
 
 
 def build_bundle(
     main_path: pathlib.Path,
     deck_path: pathlib.Path,
     out_path: pathlib.Path,
+    with_engine: bool = False,
 ) -> pathlib.Path:
-    """Assemble the .tar.gz Kaggle expects."""
+    """Assemble the .tar.gz Kaggle expects.
+
+    Args:
+        main_path: Top-level ``main.py`` (must define ``agent``).
+        deck_path: 60-line deck CSV.
+        out_path: Destination archive.
+        with_engine: When True, also bundle ``ENGINE_MODULES`` (the
+            ISMCTS search stack) preserving their package paths. The
+            files are copied from the repo root next to ``scripts/``.
+
+    Returns:
+        The archive path.
+
+    Raises:
+        ValueError: On main/deck validation failure, a missing engine
+            module, or an oversized bundle.
+    """
     _validate_main(main_path)
     _validate_deck(deck_path)
 
@@ -78,9 +118,21 @@ def build_bundle(
         staging = pathlib.Path(tmp)
         shutil.copy2(main_path, staging / "main.py")
         shutil.copy2(deck_path, staging / "deck.csv")
+        arcnames = ["main.py", "deck.csv"]
+
+        if with_engine:
+            for rel in ENGINE_MODULES:
+                src = REPO_ROOT / rel
+                if not src.exists():
+                    raise ValueError(f"engine module missing: {src}")
+                dest = staging / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+                arcnames.append(rel)
+
         with tarfile.open(out_path, "w:gz") as tar:
-            tar.add(staging / "main.py", arcname="main.py")
-            tar.add(staging / "deck.csv", arcname="deck.csv")
+            for arc in arcnames:
+                tar.add(staging / arc, arcname=arc)
 
     size = out_path.stat().st_size
     if size > BUNDLE_MAX_BYTES:
@@ -92,18 +144,27 @@ def build_bundle(
 
 
 def _parse_args(argv: list[str]) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     p.add_argument("--main", type=pathlib.Path, default=DEFAULT_MAIN)
     p.add_argument("--deck", type=pathlib.Path, default=DEFAULT_DECK)
     p.add_argument("--out", type=pathlib.Path, default=DEFAULT_OUT)
+    p.add_argument("--with-engine", action="store_true",
+                   help="Bundle the ISMCTS search stack (env/ + search/).")
     return p.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv if argv is not None else sys.argv[1:])
-    out = build_bundle(args.main, args.deck, args.out)
+    out = build_bundle(args.main, args.deck, args.out,
+                       with_engine=args.with_engine)
     size_mib = out.stat().st_size / (1024 * 1024)
+    with tarfile.open(out) as tar:
+        names = sorted(tar.getnames())
     print(f"wrote {out} ({size_mib:.2f} MiB)")
+    print(f"contents: {names}")
     return 0
 
 

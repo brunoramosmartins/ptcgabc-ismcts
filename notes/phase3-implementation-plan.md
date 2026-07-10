@@ -214,6 +214,48 @@ is a validity flag. Next repro attempt: loop smoke matches until a
 mulligan occurs and inspect the failing observation's log for reveal
 events.
 
+**Pilot diagnosis (2026-07, 10 instrumented matches).** 15 fallbacks:
+
+- **13/15 were our own `DeterminizationError`, always off by exactly
+  one card** ("pool has N+1, engine needs N"). Root cause: a card
+  being resolved right now (e.g. a Trainer played from hand) lives in
+  `select.contextCard` — removed from the hand, not yet in the
+  discard — and `visible_cards` only walked `obs["current"]`.
+  **Fixed:** the sweep now covers `select` too, with deduplication by
+  the card's unique `serial` (the same physical card can appear both
+  on the board and as a select reference). Regression tests added.
+- **2/15 were the engine error code 2, both at turn 0** (setup).
+  Residual rate ~2% of matches, setup-only. Treated as a documented
+  setup-phase exception consistent with EXP-003's validity flag
+  ("outside setup turns"); revisit if the post-fix pilot shows it
+  anywhere else.
+
+Timing from the pilot: mean ~27.5 s/match pre-fix (fallback matches
+run *faster* because a fallback skips a 1000-iteration search), so
+EXP-003's 500 matches project to **~4–5.5 h** post-fix.
+
+**Resolution (pilot v3 → v4).** The v2 fix (sweep the whole `select`)
+overcorrected: `select.deck` cards are still counted in `deckCount`,
+so sweeping them double-counted the deck (signature: "pool has 6,
+visible=54"). The census embedded in the exceptions then identified
+the true residual causes in one run:
+
+- **Limbo cards** — our own face-down active during setup
+  (`active=[None]` on our side) and a Trainer mid-resolution (in no
+  zone, not even `contextCard`). Both are unidentifiable from the
+  observation. Fix: `POOL_SLACK = 2` — when the hidden pool exceeds
+  the requirement by ≤ 2, sample `need` cards uniformly; the true
+  hidden set is a subset of the pool, so most determinizations remain
+  fully consistent. Larger deviations still fail loud.
+- **SearchBegin error 2** — the unrevealed enemy active sampled from
+  the pool could be an Energy/Trainer, an invalid state. Fix:
+  `basic_pokemon_ids()` loads the engine's AllCard database once
+  (multi-layout key detection, fail-loud with a sample entry if the
+  schema is unknown) and the active segment samples Basics only.
+
+Pilot v4: **zero fallbacks across 10 matches** — ISMCTS searches every
+decision. EXP-003 cleared to run.
+
 ### Findings from the top public notebook (2026-07)
 
 The most-voted public notebook on the competition confirmed everything

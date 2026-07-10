@@ -44,6 +44,8 @@ if str(REPO_ROOT) not in sys.path:
 from agents.base import Agent  # noqa: E402
 from agents.heuristic_agent import HeuristicAgent  # noqa: E402
 from agents.ismcts_agent import ISMCTSAgent  # noqa: E402
+from agents.oracle_agent import OracleAgent  # noqa: E402
+from agents.pimc_agent import PIMCAgent  # noqa: E402
 from agents.random_agent import RandomAgent  # noqa: E402
 from stats.wilson import wilson_interval  # noqa: E402
 
@@ -71,10 +73,26 @@ def _ismcts_builder(seed: int, deck: list[int], iterations: int) -> Agent:
     )
 
 
+def _pimc_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    return PIMCAgent(
+        my_deck_list=deck,
+        opponent_deck_list=deck,   # mirror matches: the list is known
+        iterations=iterations,
+        rng=random.Random(seed),
+    )
+
+
+def _oracle_builder(seed: int, deck: list[int], iterations: int) -> Agent:
+    del deck  # the oracle reads the true state from the visualizer
+    return OracleAgent(iterations=iterations, rng=random.Random(seed))
+
+
 AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "random": _random_builder,
     "heuristic": _heuristic_builder,
     "ismcts": _ismcts_builder,
+    "pimc": _pimc_builder,
+    "oracle": _oracle_builder,   # LOCAL DIAGNOSTIC ONLY — never submit
 }
 
 
@@ -101,25 +119,39 @@ def run_match(
     seed: int,
     iterations: int,
 ) -> dict:
-    """Play one match; returns per-match row including fallback counts."""
+    """Play one match; returns per-match row including fallback details."""
+    import time
+
     from kaggle_environments import make
 
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
     agent_a = builder_a(seed, deck, iterations)
     agent_b = builder_b(seed, deck, iterations)
 
+    t0 = time.perf_counter()
     env.run([_wrap_for_cabt(agent_a, deck), _wrap_for_cabt(agent_b, deck)])
+    seconds = time.perf_counter() - t0
 
     reward_a = env.state[0]["reward"]
     reward_b = env.state[1]["reward"]
-    return {
+    events_a = list(getattr(agent_a, "fallback_events", []))
+    events_b = list(getattr(agent_b, "fallback_events", []))
+    row = {
         "seed": seed,
         "reward_a": reward_a,
         "reward_b": reward_b,
         "outcome_for_a": _sign(reward_a - reward_b),
-        "fallbacks_a": len(getattr(agent_a, "fallback_events", [])),
-        "fallbacks_b": len(getattr(agent_b, "fallback_events", [])),
+        "seconds": round(seconds, 2),
+        "fallbacks_a": len(events_a),
+        "fallbacks_b": len(events_b),
     }
+    # Full event strings (turn + error) only when present — the
+    # investigation trail for the EXP validity flag.
+    if events_a:
+        row["fallback_events_a"] = events_a
+    if events_b:
+        row["fallback_events_b"] = events_b
+    return row
 
 
 def _sign(x: float) -> int:

@@ -118,6 +118,62 @@ def _select_move(
     return best
 
 
+def _run_iteration(
+    root: InfoSetNode,
+    obs: dict,
+    det: dict,
+    root_index: int,
+    c: float,
+    rng: random.Random,
+) -> None:
+    """One MCTS iteration on `root` in the determinized world `det`.
+
+    Reconstructs the world with `search_begin`, descends `root` with
+    subset-armed UCB1 selecting only moves legal in this
+    determinization, expands one unvisited move and rolls out, then
+    backpropagates the terminal reward. Shared by the ISMCTS (one
+    shared root, fresh `det` per call) and PIMC (one root per
+    determinization) drivers.
+    """
+    state = search_engine.search_begin(obs, **det)
+    node, path = root, [root]
+    while True:
+        cur = state["observation"]["current"]
+        if cur["result"] != RESULT_IN_PROGRESS:
+            reward = _terminal_reward(cur["result"], root_index)
+            break
+        available = enumerate_moves(state["observation"]["select"])
+        node.mark_available(key for key, _ in available)
+        unvisited = node.unvisited_available(key for key, _ in available)
+        if unvisited:
+            key = rng.choice(unvisited)
+            indices = next(i for k, i in available if k == key)
+            state = search_engine.search_step(state["search_id"], indices)
+            child = node.children[key]
+            path.append(child)
+            result = _rollout(state, rng)
+            reward = _terminal_reward(result, root_index)
+            break
+        maximize = cur["yourIndex"] == root_index
+        key, indices = _select_move(node, available, maximize, c)
+        state = search_engine.search_step(state["search_id"], indices)
+        node = node.children[key]
+        path.append(node)
+    for visited in path:
+        visited.update(reward)
+
+
+def _map_key_to_indices(
+    best_key: MoveKey, root_moves: list[tuple[MoveKey, list[int]]]
+) -> list[int]:
+    for key, indices in root_moves:
+        if key == best_key:
+            return indices
+    # The best edge should always exist among the real observation's
+    # moves (our own options don't depend on hidden state at the root).
+    raise RuntimeError("best root move not found in real observation")
+
+
 def decide(
     obs: dict,
     my_deck_list: list[int],
@@ -129,9 +185,13 @@ def decide(
 ) -> list[int]:
     """Run SO-ISMCTS for one decision; return option indices to play.
 
+    One shared information-set tree; each iteration re-samples a fresh
+    determinization, so statistics from every sampled world accumulate
+    in the same nodes (Cowling's key idea). Root action = max visit
+    count.
+
     Args:
-        obs: The real observation for this decision (with
-            ``search_begin_input``).
+        obs: The real observation (with ``search_begin_input``).
         my_deck_list: Our 60-card list.
         opponent_deck_list: Theirs when known (local matches).
         rng: Seeded RNG.
@@ -140,8 +200,7 @@ def decide(
         filler_card: Fallback for unknown opponent lists (ladder).
 
     Returns:
-        The indices list for the real observation's option array,
-        chosen by max root visit count (Cowling's convention).
+        Option indices for the real observation's option array.
     """
     root_index = obs["current"]["yourIndex"]
     root = InfoSetNode()
@@ -151,44 +210,7 @@ def decide(
         det = sample_determinization(
             obs, my_deck_list, opponent_deck_list, rng, filler_card
         )
-        state = search_engine.search_begin(obs, **det)
-        node, path = root, [root]
-
-        # -- selection --------------------------------------------------
-        while True:
-            cur = state["observation"]["current"]
-            if cur["result"] != RESULT_IN_PROGRESS:
-                reward = _terminal_reward(cur["result"], root_index)
-                break
-            available = enumerate_moves(state["observation"]["select"])
-            node.mark_available(key for key, _ in available)
-            unvisited = node.unvisited_available(key for key, _ in available)
-            if unvisited:
-                # -- expansion + rollout ---------------------------------
-                key = rng.choice(unvisited)
-                indices = next(i for k, i in available if k == key)
-                state = search_engine.search_step(state["search_id"], indices)
-                child = node.children[key]
-                path.append(child)
-                result = _rollout(state, rng)
-                reward = _terminal_reward(result, root_index)
-                break
-            maximize = cur["yourIndex"] == root_index
-            key, indices = _select_move(node, available, maximize, c)
-            state = search_engine.search_step(state["search_id"], indices)
-            node = node.children[key]
-            path.append(node)
-
-        # -- backpropagation ---------------------------------------------
-        for visited in path:
-            visited.update(reward)
+        _run_iteration(root, obs, det, root_index, c, rng)
 
     search_engine.search_end()
-
-    best_key = root.best_action_by_visits()
-    for key, indices in root_moves:
-        if key == best_key:
-            return indices
-    # The best edge should always exist among the real observation's
-    # moves (our own options don't depend on hidden state at the root).
-    raise RuntimeError("best root move not found in real observation")
+    return _map_key_to_indices(root.best_action_by_visits(), root_moves)

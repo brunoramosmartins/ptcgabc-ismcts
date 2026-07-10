@@ -342,6 +342,26 @@ $$
 
 indicating that belief modeling should improve performance, but that much of the remaining decision quality may already be captured by a well-designed ISMCTS. This prediction will be evaluated empirically through the oracle baseline experiment.
 
+**Prediction vs reality (EXP-004/005, 2026-07-10).**
+
+- **ISMCTS-over-PIMC gap: predicted small → measured +3.8 pp,
+  McNemar n.s. (p = 0.176). Correct.** The §5.1 implication chain
+  (moderately high correlation/disambiguation ⇒ little headroom for
+  the info-set tree over plain determinization) held exactly.
+- **Δ_ceiling: predicted medium (5–15 pp) → measured +4.8 pp,
+  McNemar p = 0.070 (n.s.).** Narrowly missed — the true cost of
+  hidden information in mirror play sits just *below* the medium
+  band. Direction right, magnitude overestimated: the domain is even
+  more PIMC-friendly than the priors assumed, i.e. leaf correlation /
+  disambiguation are at the high end of the guessed range.
+- Combined reading: in this domain (this deck, mirror), **search
+  quality ≫ information quality**. Consistent determinization already
+  captures nearly everything a perfect belief model could; the
+  remaining ~5 pp is the entire prize for any belief work — in the
+  mirror setting. The *ladder* deficit (unknown opponent list ⇒
+  filler determinization) is a different variable that this
+  experiment deliberately did not measure.
+
 ---
 
 ## §5 — Bridge to Cowling: what does ISMCTS add on top?

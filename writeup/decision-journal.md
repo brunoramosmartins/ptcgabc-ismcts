@@ -127,3 +127,109 @@ Closed all five Phase 1 deliverables in one sitting.
 ## Failed Attempts
 
 _(filled if any come up during Phase 1.)_
+
+---
+
+## Week 3 (14 Jul – 20 Jul 2026) — Phase 2 & 3
+
+### 2026-07-09 — H1 pre-registered and tested; the validity flag paid off
+
+Phase 2 closed (hypotheses H1–H4 LOCKED, tag `v0.3-hypotheses`) and the
+SO-ISMCTS core shipped. Then the first pre-registered hypothesis went to
+test.
+
+**Result.** EXP-003 (ISMCTS vs heuristic, N = 500 paired seeds, 1000
+iterations/decision): **390W–110L, win rate 0.780, Wilson 95% CI
+[0.742, 0.814]**. H1 SUPPORTED — lower bound clears 0.5 by ~24 pp.
+
+**Why this result is trustworthy, and it nearly wasn't.** The
+determinizer's fail-loud accounting plus the agent's fallback counter
+(both built before the experiment) caught a real defect the pilot runs
+surfaced: our determinization was systematically off by one card
+whenever a Trainer was mid-resolution or our own active was face-down
+during setup, and the unrevealed enemy active could be sampled as an
+illegal non-Basic. Three instrumented pilots (fallbacks 29 → 15 → 0)
+diagnosed and fixed all of it. Had we skipped the validity flag and run
+straight to N = 500, we'd have measured an ISMCTS/heuristic hybrid and
+never known — 6 hours of invalid data presented as a clean result. The
+research infrastructure was not overhead; it was the difference between
+a real finding and a fake one. (This is the concrete instance of the
+synthesis Lessons-Learned claim that "research infrastructure is part
+of the contribution.")
+
+**What the result does NOT say.** This is a local head-to-head, not the
+Kaggle ladder, and it does not explain *why* ISMCTS wins — is it the
+value of search per se, the shared info-set tree specifically, or
+something the heuristic simply lacks? That decomposition is the
+diagnostic ladder's job (PIMC + oracle arms), next up.
+
+**Operational note.** The run survived two mid-execution reboots
+losslessly because the local ladder flushes one JSON line per match.
+Resumed by pointing `--seed-start` at the next seed and merging the
+parts. Also logged a personal error worth remembering: I cannot check a
+WSL process's liveness with `ps` from the Windows-side shell — different
+process namespaces; only the growing output file proves the run is
+alive.
+
+### 2026-07-10 — The diagnostic ladder closed; the decomposition speaks
+
+Three 500-match runs on the same paired seeds, all with zero fallbacks:
+
+| Rung | Win rate vs heuristic | Increment |
+|---|---|---|
+| Heuristic | 0.500 | — |
+| PIMC (Determinized UCT) | 0.742 | **+24.2 pp — search itself** |
+| SO-ISMCTS | 0.780 | +3.8 pp — info-set tree (McNemar n.s., p=0.176) |
+| Oracle (true state) | 0.828 | +4.8 pp — perfect information (n.s., p=0.070) |
+
+The story the numbers tell: **in this domain, search quality dwarfs
+information quality.** Any consistent-determinization tree search
+captures ~87% of the oracle's total edge over the heuristic; the
+info-set-tree refinement and even perfect knowledge of hidden cards
+add margins that N=500 cannot statistically resolve. Both registered
+predictions from the Long reading were directionally right (the
+ISMCTS-over-PIMC gap prediction exactly; the Δ_ceiling prediction
+missed its 5–15 pp band by 0.2 pp on the low side).
+
+Consequence, executed per the pre-registered gate: **belief modeling
+beyond consistency is dropped for mirror play** (≤ ~5 pp total prize).
+The sharper question it leaves for Phase 5: on the *ladder* the agent
+runs filler determinization because the opponent's list is unknown —
+and the interim ladder ratings (ISMCTS ≈ heuristic there, vs +28 pp
+locally) suggest that gap is where the real recoverable value sits.
+Deck/archetype *identification* — recovering consistency, not
+refining beliefs — is the follow-up worth funding.
+
+Also: watching ladder replays surfaced the mirror-only limitation of
+our local experiments (opponents run diverse decks); registered as
+*deck-diversity-local-pool* in open-ideas, feeding Phase 4's deck
+selection.
+
+## Failed Attempts
+
+- **Determinizer off-by-one (contextCard / limbo cards).** First fix
+  swept the whole `select` subtree, which over-corrected by
+  double-counting `select.deck` (deck-browse effects). Narrowed to
+  `select.contextCard` only, plus a `POOL_SLACK = 2` tolerance for
+  genuinely unidentifiable limbo cards (our face-down setup active; a
+  Trainer mid-resolution). Fixed across pilots v1–v4.
+- **Illegal enemy active (SearchBegin error 2).** The unrevealed
+  opponent active was sampled uniformly and could land on an
+  Energy/Trainer — an invalid board state the engine rejected. Fixed by
+  filtering that slot to Basic Pokémon via the engine's `AllCard`
+  database.
+- **ISMCTS submission failed validation — `__file__` undefined, and a
+  validation test that was theatre.** The Kaggle worker runs `main.py`
+  via `exec(code, env)`, where `__file__` is not defined; the shim's
+  `sys.path` bootstrap used `os.path.abspath(__file__)` and crashed at
+  import, before any decision. Two submission slots burned before we
+  read the agent logs. Worse: the local bundle validator I wrote to
+  prevent exactly this missed it, because it loaded the agent via
+  `import main` (where `__file__` *is* defined) instead of by path
+  (which makes kaggle-environments `exec` it, as the worker does). Lesson,
+  now baked into `validate_bundle.py`'s docstring: **a validation
+  harness that doesn't load the artifact the way production loads it is
+  theatre.** Fix: guard the `__file__` use with try/except (fall back to
+  `/kaggle_simulations/agent` + CWD); validator now loads by path and
+  reproduces the exec. Timing was never the problem — self-play is ~45 s
+  local, worker banks 600 s overage/agent/episode.

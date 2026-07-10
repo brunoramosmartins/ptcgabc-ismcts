@@ -6,6 +6,7 @@ carry ``id`` + ``playerIndex``; face-down cards have no integer id.
 
 from __future__ import annotations
 
+import itertools
 import random
 from collections import Counter
 
@@ -16,10 +17,11 @@ from search.determinize import (
 )
 
 ME, OPP = 0, 1
+_serials = itertools.count(1)
 
 
 def _card(cid: int, owner: int) -> dict:
-    return {"id": cid, "serial": 0, "playerIndex": owner}
+    return {"id": cid, "serial": next(_serials), "playerIndex": owner}
 
 
 def _obs(
@@ -79,6 +81,64 @@ def test_visible_cards_partitions_by_owner() -> None:
     assert theirs == Counter({7: 1, 50: 1})              # discard+active
 
 
+def test_context_card_in_select_is_swept() -> None:
+    # A Trainer being resolved lives in select.contextCard — in no
+    # board zone. Missing it made the hidden pool one card too large
+    # (the off-by-one the EXP-003 pilot exposed).
+    obs = _obs(
+        my_hand=[1], my_discard=[], my_deck_count=2, my_prize_count=1,
+        opp_discard=[], opp_deck_count=2, opp_prize_count=1, opp_hand_count=1,
+    )
+    obs["select"] = {"contextCard": _card(99, ME), "option": []}
+    mine, _ = visible_cards(obs)
+    assert mine[99] == 1
+
+    # And the pool accounting closes with the limbo card excluded:
+    my_list = [1, 10, 99, 20, 21, 22]      # visible: 1, 10, 99 → pool 3
+    opp_list = [50, 30, 31, 32, 33]
+    det = sample_determinization(obs, my_list, opp_list, random.Random(4))
+    assert sorted(det["my_deck"] + det["my_prize"]) == [20, 21, 22]
+
+
+def test_same_serial_counted_once_across_current_and_select() -> None:
+    # The same physical card can appear on the board AND as a
+    # reference inside select (e.g. an ability's source). Serial
+    # dedupe must count it once, or the pool comes up short.
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=2, my_prize_count=1,
+        opp_discard=[], opp_deck_count=2, opp_prize_count=1, opp_hand_count=1,
+    )
+    active_card = obs["current"]["players"][ME]["active"][0]
+    obs["select"] = {"contextCard": dict(active_card), "option": []}
+    mine, _ = visible_cards(obs)
+    assert mine[active_card["id"]] == 1   # not 2
+
+
+def test_select_deck_is_not_swept() -> None:
+    # Cards shown by a deck-search effect (select.deck) are still
+    # counted in deckCount; sweeping them double-counts the deck
+    # (pilot v2 signature: "pool has 6, visible=54").
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=3, my_prize_count=1,
+        opp_discard=[], opp_deck_count=2, opp_prize_count=1, opp_hand_count=1,
+    )
+    obs["select"] = {
+        "contextCard": None,
+        "deck": [_card(20, ME), _card(21, ME), _card(22, ME)],
+        "option": [],
+    }
+    mine, _ = visible_cards(obs)
+    assert 20 not in mine and 21 not in mine and 22 not in mine
+
+    my_list = [10, 20, 21, 22, 3]          # visible: active(10) only
+    opp_list = [50, 30, 31, 32, 33]
+    det = sample_determinization(obs, my_list, opp_list, random.Random(6))
+    # deck-browse cards stay in the hidden pool (they ARE the deck)
+    assert len(det["my_deck"]) == 3
+    assert len(det["my_prize"]) == 1
+    assert sorted(det["my_deck"] + det["my_prize"]) == [3, 20, 21, 22]
+
+
 def test_facedown_cards_are_skipped() -> None:
     obs = _obs(
         my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
@@ -127,10 +187,55 @@ def test_hidden_active_is_drawn_from_opponent_pool() -> None:
     )
     my_list = [10, 3, 3]
     opp_list = [40, 41, 42, 43]            # nothing visible; 4 hidden slots
-    det = sample_determinization(obs, my_list, opp_list, random.Random(3))
+    det = sample_determinization(obs, my_list, opp_list, random.Random(3),
+                                 basic_ids={40, 41, 42, 43})
     assert len(det["enemy_active"]) == 1
     assert sorted(det["enemy_deck"] + det["enemy_prize"]
                   + det["enemy_hand"] + det["enemy_active"]) == [40, 41, 42, 43]
+
+
+def test_hidden_active_must_be_a_basic() -> None:
+    # Only card 43 is a Basic — the unrevealed active must be it,
+    # regardless of the RNG (an Energy in the active slot is the
+    # invalid state behind SearchBegin error 2).
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=1,
+        opp_active_hidden=True,
+    )
+    my_list = [10, 3, 3]
+    opp_list = [40, 41, 42, 43]
+    for seed in range(5):
+        det = sample_determinization(obs, my_list, opp_list,
+                                     random.Random(seed), basic_ids={43})
+        assert det["enemy_active"] == [43]
+
+
+def test_no_basic_available_for_hidden_active_raises() -> None:
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=1,
+        opp_active_hidden=True,
+    )
+    with pytest.raises(DeterminizationError, match="Basic"):
+        sample_determinization(obs, [10, 3, 3], [40, 41, 42, 43],
+                               random.Random(1), basic_ids={999})
+
+
+def test_pool_slack_tolerates_one_limbo_card() -> None:
+    # Pool has need+1 candidates (e.g. our face-down setup active or a
+    # Trainer mid-resolution is unidentifiable). Sampling must succeed
+    # and use only pool cards.
+    obs = _obs(
+        my_hand=[1], my_discard=[], my_deck_count=2, my_prize_count=1,
+        opp_discard=[], opp_deck_count=2, opp_prize_count=1, opp_hand_count=1,
+    )
+    my_list = [1, 10, 20, 21, 22, 23]      # pool {20,21,22,23}, need 3
+    opp_list = [50, 30, 31, 32, 33]        # pool exactly 4 = need
+    det = sample_determinization(obs, my_list, opp_list, random.Random(2))
+    mine = det["my_deck"] + det["my_prize"]
+    assert len(mine) == 3
+    assert set(mine) <= {20, 21, 22, 23}
 
 
 def test_seeded_rng_is_reproducible() -> None:
@@ -145,7 +250,7 @@ def test_seeded_rng_is_reproducible() -> None:
     assert a == b
 
 
-def test_accounting_mismatch_raises() -> None:
+def test_accounting_mismatch_beyond_slack_raises() -> None:
     obs = _obs(
         my_hand=[1], my_discard=[], my_deck_count=10, my_prize_count=6,
         opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=1,
@@ -154,6 +259,18 @@ def test_accounting_mismatch_raises() -> None:
     with pytest.raises(DeterminizationError, match="my side"):
         sample_determinization(obs, my_list, _deck_for([50], 3),
                                random.Random(1))
+
+
+def test_pool_excess_beyond_slack_raises() -> None:
+    # need+3 exceeds POOL_SLACK — a systematic sweep bug must still
+    # fail loud instead of silently sampling.
+    obs = _obs(
+        my_hand=[1], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=0,
+    )
+    my_list = [1, 10, 20, 21, 22, 23, 24]  # pool of 5, need 2, excess 3
+    with pytest.raises(DeterminizationError, match="slack"):
+        sample_determinization(obs, my_list, [50, 3, 3], random.Random(1))
 
 
 def test_visible_card_not_in_deck_list_raises() -> None:
