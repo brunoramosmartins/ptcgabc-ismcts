@@ -205,6 +205,31 @@ our local experiments (opponents run diverse decks); registered as
 *deck-diversity-local-pool* in open-ideas, feeding Phase 4's deck
 selection.
 
+### 2026-07-10 — Deck selection: pool-first, maximin, control included
+
+With EXP-006 running, Phase 4's second thread started: replacing the
+Phase-0 placeholder deck (ADR-002). Decisions made today:
+
+1. **Internet meta rejected as a source.** The competition is a
+   *Limited Card Battle* on a curated ~1267-card pool; public
+   Standard lists assume cards this pool may not have, and card
+   strength is pool-relative. Sources are the pool itself
+   (`scripts/analyze_card_pool.py`) and ladder replays; the meta is
+   at most archetype inspiration.
+2. **Four candidates spanning the design space**, not four attempts
+   at the best deck: `current-v1` (control), `v1-tuned` (same core,
+   fixed ratios — isolates "archetype vs ratios"), `aggro-fire`
+   (big basics, zero setup), `emboar-evolution` (Stage-2 ceiling,
+   also a live probe of whether F3+search can pilot a setup deck).
+3. **Selection rule pre-registered in EXP-007 before any match:**
+   maximin over matchup rows (robustness against an unknown opponent
+   pool beats average edge), replacement only if the winner beats
+   `current-v1` with Wilson lower bound > 0.5.
+4. **Ladder runner extended for asymmetric decks** — builder contract
+   now passes both true lists, so determinization consistency holds
+   off-mirror. This was the cheap half of *deck-diversity-local-pool*;
+   the Phase-5 exploratory half (per-matchup H1 check) stays open.
+
 ## Failed Attempts
 
 - **Determinizer off-by-one (contextCard / limbo cards).** First fix
