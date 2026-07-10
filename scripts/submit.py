@@ -65,6 +65,12 @@ def _validate_main(main_path: pathlib.Path) -> None:
         raise ValueError(
             f"{main_path} does not define a top-level `agent` function."
         )
+    if "oracle" in src.lower():
+        raise ValueError(
+            f"{main_path} references the oracle — the cheating agent is a "
+            "LOCAL diagnostic and must never be submitted (competition "
+            "rules)."
+        )
 
 
 # Engine modules the ISMCTS shim needs at runtime, bundled preserving

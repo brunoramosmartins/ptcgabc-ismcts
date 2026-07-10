@@ -73,6 +73,22 @@ def test_main_must_define_agent(tmp_path: pathlib.Path) -> None:
         build_bundle(main, deck, out)
 
 
+def test_oracle_references_are_rejected(tmp_path: pathlib.Path) -> None:
+    # The cheating agent is a local diagnostic; bundling it would
+    # violate competition rules. submit.py must refuse.
+    main = tmp_path / "main.py"
+    deck = tmp_path / "deck.csv"
+    out = tmp_path / "submission.tar.gz"
+    main.write_text(
+        "from search.oracle import decide_oracle\n"
+        "def agent(obs):\n    return []\n"
+    )
+    _write_valid_deck(deck)
+
+    with pytest.raises(ValueError, match="oracle"):
+        build_bundle(main, deck, out)
+
+
 def test_with_engine_bundles_search_stack(tmp_path: pathlib.Path) -> None:
     main = tmp_path / "main.py"
     deck = tmp_path / "deck.csv"

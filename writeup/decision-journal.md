@@ -171,6 +171,40 @@ WSL process's liveness with `ps` from the Windows-side shell — different
 process namespaces; only the growing output file proves the run is
 alive.
 
+### 2026-07-10 — The diagnostic ladder closed; the decomposition speaks
+
+Three 500-match runs on the same paired seeds, all with zero fallbacks:
+
+| Rung | Win rate vs heuristic | Increment |
+|---|---|---|
+| Heuristic | 0.500 | — |
+| PIMC (Determinized UCT) | 0.742 | **+24.2 pp — search itself** |
+| SO-ISMCTS | 0.780 | +3.8 pp — info-set tree (McNemar n.s., p=0.176) |
+| Oracle (true state) | 0.828 | +4.8 pp — perfect information (n.s., p=0.070) |
+
+The story the numbers tell: **in this domain, search quality dwarfs
+information quality.** Any consistent-determinization tree search
+captures ~87% of the oracle's total edge over the heuristic; the
+info-set-tree refinement and even perfect knowledge of hidden cards
+add margins that N=500 cannot statistically resolve. Both registered
+predictions from the Long reading were directionally right (the
+ISMCTS-over-PIMC gap prediction exactly; the Δ_ceiling prediction
+missed its 5–15 pp band by 0.2 pp on the low side).
+
+Consequence, executed per the pre-registered gate: **belief modeling
+beyond consistency is dropped for mirror play** (≤ ~5 pp total prize).
+The sharper question it leaves for Phase 5: on the *ladder* the agent
+runs filler determinization because the opponent's list is unknown —
+and the interim ladder ratings (ISMCTS ≈ heuristic there, vs +28 pp
+locally) suggest that gap is where the real recoverable value sits.
+Deck/archetype *identification* — recovering consistency, not
+refining beliefs — is the follow-up worth funding.
+
+Also: watching ladder replays surfaced the mirror-only limitation of
+our local experiments (opponents run diverse decks); registered as
+*deck-diversity-local-pool* in open-ideas, feeding Phase 4's deck
+selection.
+
 ## Failed Attempts
 
 - **Determinizer off-by-one (contextCard / limbo cards).** First fix

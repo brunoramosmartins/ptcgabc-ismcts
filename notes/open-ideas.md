@@ -207,6 +207,17 @@ where the expectation is now over the informed distribution.
 - **gated** — 2026-07 (Bruno added the *oracle-baseline-cheating-uct*
   prerequisite after further Cowling reading; now blocked on
   measuring $\Delta_{\text{ceiling}}$).
+- **resolved: dropped for the mirror context** — 2026-07-10. EXP-005
+  measured $\Delta_{\text{ceiling}} = +4.8$ pp (McNemar p = 0.070,
+  n.s.), below the pre-registered ≲ 5 pp drop threshold. Even a
+  perfect belief model buys ≤ ~5 pp over consistent uniform
+  determinization in mirror play — options 1-beyond-consistency and 2
+  are not worth their cost here. **What survives:** the *ladder*
+  problem is different — there the deficit is not belief refinement
+  but the unknown opponent *list* (filler ≪ consistent). Inferring
+  the opponent's deck/archetype to *recover consistency* on the
+  ladder remains open and is now the sharper Phase-5 question (see
+  EXP-005 in the registry).
 
 ---
 
