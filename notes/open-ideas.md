@@ -677,4 +677,57 @@ rollout policy, reward) identical to the ISMCTS arm.
 
 ---
 
+### deck-diversity-local-pool — Test agents across matchups, not just mirrors
+
+**Motivation.**
+
+Every local experiment so far (EXP-002a/003/004) is a mirror match:
+both seats play `decks/selected/deck.csv`. That cleanly isolates the
+*algorithm* but measures nothing about *matchup robustness* — while
+the Kaggle ladder, where ratings actually accrue, is all cross-matchup
+(observed while watching replays: every opponent runs a different
+list). This is an external-validity gap already flagged in the Cowling
+notes (§6.1): our conclusions are about mirror play on one placeholder
+deck.
+
+**Formal statement.**
+
+Build a small local deck pool (3–5 archetype-distinct legal lists —
+Phase 4's ADR-002 candidate decks are the natural source). Extend
+`scripts/local_ladder.py` to accept per-seat deck paths
+(`--deck-a` / `--deck-b`) and run the round-robin: agent × deck-pair.
+Report win rate per matchup cell plus the pooled rate, all with Wilson
+CIs. Note ISMCTS's determinizer already supports asymmetric lists
+(`my_deck_list` ≠ `opponent_deck_list`).
+
+**Literature.**
+
+- Long et al. (2010) — domain properties (leaf correlation,
+  disambiguation) may differ by matchup; a mirror measures one point
+  of that space.
+- Cowling et al. (2012) §6.1 notes (our reading) — external validity
+  depends on deck/situation diversity.
+
+**Where in the roadmap.**
+
+- Natural companion to **Phase 4's deck selection (ADR-002)**: the
+  candidate-deck evaluation already requires cross-matchup local
+  play, so the runner extension pays for itself there.
+- As an *experiment*, Phase 5 exploratory (per-matchup H1-style
+  check: does ISMCTS's edge over the heuristic hold across
+  matchups?).
+
+**Risk to scope.**
+
+- Runner extension ~0.5 day. The cost is match volume: a 4-deck pool
+  is 10 pairings × N matches. Mitigate with N = 100/cell for
+  directional reads, reserving N = 500 for the chosen deck.
+
+**Status.**
+
+- **idea** — 2026-07 (raised by Bruno after watching ladder replays:
+  "o deck dos adversários é diferente — exploramos outros decks?").
+
+---
+
 _(Next idea goes here — copy the schema block above.)_
