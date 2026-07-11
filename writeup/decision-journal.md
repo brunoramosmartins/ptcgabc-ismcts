@@ -230,6 +230,34 @@ Phase-0 placeholder deck (ADR-002). Decisions made today:
    off-mirror. This was the cheap half of *deck-diversity-local-pool*;
    the Phase-5 exploratory half (per-matchup H1 check) stays open.
 
+### 2026-07-11 — H2 not supported; the pre-registered rule applied as written
+
+EXP-006 (guided rollouts, N = 500 on EXP-003's seeds): 0.810 vs 0.780,
+Δ = +3.0 pp, McNemar exact p = 0.279. The pre-registered criterion was
+p < 0.05 — **H2 is NOT SUPPORTED**, our first null result on a locked
+hypothesis. It is also the *expected* null after the diagnostic
+ladder: plain ISMCTS was already within 4.8 pp of the omniscient
+ceiling, so a rollout-policy change had almost no room to show a
+detectable effect at this N. The honest headline stays "search
+dominates; refinements are marginal here."
+
+Two consequences decided today:
+
+1. **EXP-007 runs with `ismcts`, not `ismcts-guided`.** The registry
+   rule said "guided iff H2 holds"; it didn't. The temptation was
+   real — guided is Pareto non-inferior (+3 pp point estimate) and
+   ~18% faster — but editing a pre-registered decision rule after
+   seeing the data is exactly the practice the registry exists to
+   prevent. Recorded in the EXP-007 row before any match ran.
+2. **The speed observation is promoted to the H3/time-budget thread,
+   where it legitimately belongs.** Guided rollouts end games sooner
+   (median 25.6 s vs 31.4 s per match at fixed 1000 iterations). H2
+   tested strength at fixed *iterations*; Kaggle's regime is fixed
+   *time*, where faster rollouts buy more iterations. Whether
+   guided-at-time-budget beats random-at-time-budget is a different,
+   testable question — it goes into the Phase 4 tuning work (#26/#27)
+   rather than being smuggled into the H2 verdict.
+
 ## Failed Attempts
 
 - **Determinizer off-by-one (contextCard / limbo cards).** First fix
