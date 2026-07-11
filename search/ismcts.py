@@ -68,7 +68,10 @@ def enumerate_moves(select: dict) -> list[tuple[MoveKey, list[int]]]:
     same tree edge across determinizations.
     """
     options = select["option"]
-    k = select["maxCount"]
+    # Some card effects ("search for up to N ...") emit selects whose
+    # maxCount exceeds the options actually present; picking everything
+    # available is the only legal move then.
+    k = min(select["maxCount"], len(options))
     moves: list[tuple[MoveKey, list[int]]] = []
     for combo in islice(combinations(range(len(options)), k), MAX_MOVES):
         key = tuple(sorted(
@@ -92,7 +95,8 @@ def _rollout(state: dict, rng: random.Random, cap: int = 3000) -> int:
         if cur["result"] != RESULT_IN_PROGRESS:
             return cur["result"]
         sel = obs["select"]
-        choice = rng.sample(range(len(sel["option"])), sel["maxCount"])
+        n = len(sel["option"])
+        choice = rng.sample(range(n), min(sel["maxCount"], n))
         nxt = search_engine.search_step(sid, choice)
         sid, obs = nxt["search_id"], nxt["observation"]
     return RESULT_DRAW  # cap hit — treat as draw, per ADR-004 timeout rule

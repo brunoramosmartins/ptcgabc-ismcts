@@ -120,3 +120,14 @@ def test_enumerate_moves_pairs_and_cap() -> None:
     assert len(moves) == 64                      # capped (C(20,2) = 190)
     assert all(len(idx) == 2 for _, idx in moves)
     assert all(len(key) == 2 for key, _ in moves)
+
+
+def test_enumerate_moves_max_count_exceeds_options() -> None:
+    # "Search for up to 3 ..." selects can offer fewer options than
+    # maxCount (e.g. only 2 matching cards left in deck); the only
+    # legal move is taking everything available. Regression for the
+    # EXP-007 seed-37 crash.
+    select = {"option": [WIN_OPT, LOSE_OPT], "minCount": 0, "maxCount": 3}
+    moves = enumerate_moves(select)
+    assert len(moves) == 1
+    assert moves[0][1] == [0, 1]

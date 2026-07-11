@@ -41,7 +41,7 @@ def make_guided_rollout(
                 return cur["result"]
             sel = obs["select"]
             options = sel["option"]
-            k = sel["maxCount"]
+            k = min(sel["maxCount"], len(options))
             if k == 1 and rng.random() >= eps:
                 scores = scorer.score_all(options, obs)
                 best = max(scores)

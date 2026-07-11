@@ -17,5 +17,5 @@ class RandomAgent(Agent):
 
     def choose(self, obs: dict) -> list[int]:
         n_options = len(obs["select"]["option"])
-        max_count = obs["select"]["maxCount"]
+        max_count = min(obs["select"]["maxCount"], n_options)
         return self.rng.sample(range(n_options), max_count)

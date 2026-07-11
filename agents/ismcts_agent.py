@@ -64,4 +64,5 @@ class ISMCTSAgent(Agent):
         except (SearchApiError, DeterminizationError) as exc:
             turn = (obs.get("current") or {}).get("turn")
             self.fallback_events.append(f"turn={turn}: {exc}")
-            return list(range(obs["select"]["maxCount"]))
+            n = len(obs["select"]["option"])
+            return list(range(min(obs["select"]["maxCount"], n)))

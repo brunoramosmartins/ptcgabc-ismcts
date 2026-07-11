@@ -260,6 +260,31 @@ Two consequences decided today:
 
 ## Failed Attempts
 
+- **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs
+  aggro-fire).** Card effects like Cyrano ("search for *up to 3*
+  Pokémon ex") emit selects whose `maxCount` can exceed the options
+  actually present — and `random.sample(range(n), maxCount)` raises
+  `ValueError`, which the agent fallback (scoped to
+  `SearchApiError`/`DeterminizationError`) did not catch; the env
+  scored the side as errored (`reward=None`) and the runner, not
+  expecting that, died mid-round-robin. 1,500+ mirror matches on the
+  placeholder deck never hit this because that deck rarely thins its
+  ex count below 3 — the bug was *deck-dependent*, which is exactly
+  why the candidate pool exists. Fixed with `min(maxCount, n)` clamps
+  at every choice site (enumerate_moves, both rollouts, RandomAgent,
+  agent fallbacks), `env_error` rows instead of runner death, and
+  true resume (`--append`) in the runner. Root cause confirmed by
+  rerunning seed 37 under identical RNG: completes cleanly with the
+  clamps, crashed without. Also exposed: the wall-clock estimate for
+  asymmetric matchups was ~6× optimistic (median 106–258 s/match vs
+  ~30 s mirror — longer games, more decisions per game).
+- **v1-tuned's "obvious" fixes backfired (partial, 12W–38L vs
+  current-v1).** Cutting energy 35→27 to add trainers weakened
+  exactly what makes the sample deck work: Hammer-lanche's damage
+  scales with deck energy *density* (discard 6 from top, 100× per
+  {W} found). The sample deck is better designed than it looks;
+  candidate design must respect a deck's scaling engine, not generic
+  deckbuilding lore.
 - **Determinizer off-by-one (contextCard / limbo cards).** First fix
   swept the whole `select` subtree, which over-corrected by
   double-counting `select.deck` (deck-browse effects). Narrowed to

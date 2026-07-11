@@ -161,15 +161,27 @@ def run_match(
     reward_b = env.state[1]["reward"]
     events_a = list(getattr(agent_a, "fallback_events", []))
     events_b = list(getattr(agent_b, "fallback_events", []))
+    # A None reward means that side's agent crashed or timed out inside
+    # the env (status ERROR/TIMEOUT/INVALID). Score the errored side as
+    # the loser, flag the row, and keep the run alive — any errored
+    # match invalidates the cell until the root cause is understood.
+    if reward_a is None or reward_b is None:
+        outcome = _sign((reward_b is None) - (reward_a is None))
+    else:
+        outcome = _sign(reward_a - reward_b)
     row = {
         "seed": seed,
         "reward_a": reward_a,
         "reward_b": reward_b,
-        "outcome_for_a": _sign(reward_a - reward_b),
+        "outcome_for_a": outcome,
         "seconds": round(seconds, 2),
         "fallbacks_a": len(events_a),
         "fallbacks_b": len(events_b),
     }
+    if reward_a is None or reward_b is None:
+        row["env_error"] = True
+        row["status_a"] = env.state[0].get("status")
+        row["status_b"] = env.state[1].get("status")
     # Full event strings (turn + error) only when present — the
     # investigation trail for the EXP validity flag.
     if events_a:
@@ -209,6 +221,7 @@ def summarize(rows: Iterable[dict]) -> dict:
             1 for r in rows
             if r.get("fallbacks_a", 0) or r.get("fallbacks_b", 0)
         ),
+        "env_errors": sum(1 for r in rows if r.get("env_error")),
     }
 
 
@@ -239,6 +252,11 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         default=None,
         help="JSONL path for per-match rows (optional).",
     )
+    p.add_argument(
+        "--append",
+        action="store_true",
+        help="Append to --out instead of truncating (resume support).",
+    )
     return p.parse_args(argv)
 
 
@@ -253,7 +271,7 @@ def main(argv: list[str] | None = None) -> int:
     out_file = None
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        out_file = args.out.open("w")
+        out_file = args.out.open("a" if args.append else "w")
     try:
         for offset in range(args.matches):
             seed = args.seed_start + offset

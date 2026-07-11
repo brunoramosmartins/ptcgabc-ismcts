@@ -27,6 +27,15 @@ def test_random_agent_returns_maxcount_distinct_indices() -> None:
     assert all(0 <= i < 6 for i in choice)
 
 
+def test_random_agent_clamps_when_options_below_maxcount() -> None:
+    # "Up to N" selects can offer fewer options than maxCount;
+    # random.sample would raise ValueError without the clamp.
+    agent = RandomAgent(rng=random.Random(42))
+    obs = _obs(options=[{"id": 0}, {"id": 1}], max_count=3, min_count=0)
+    choice = agent.choose(obs)
+    assert sorted(choice) == [0, 1]
+
+
 def test_random_agent_is_reproducible_under_seed() -> None:
     obs = _obs(options=[{"id": i} for i in range(10)], max_count=4)
     a = RandomAgent(rng=random.Random(123)).choose(obs)
