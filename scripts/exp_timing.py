@@ -102,29 +102,37 @@ def _build_seat1(args, deck: list[int], opp: list[int], seed: int):
     )
 
 
-class _TimedSeat:
-    """Wrap an agent as a ``cabt`` fn, timing each real decision.
+class _Record:
+    """Mutable per-seat log filled by the timing closure."""
 
-    Records per-decision wall time, decision count, and the last-seen
-    ``remainingOverageTime`` (the bank as the game progresses).
-    """
+    __slots__ = ("times", "last_overage")
 
-    def __init__(self, agent, deck: list[int]) -> None:
-        self._agent = agent
-        self._deck = deck
+    def __init__(self) -> None:
         self.times: list[float] = []
         self.last_overage: float | None = None
 
-    def __call__(self, obs: dict) -> list[int]:
+
+def _timed_fn(agent, deck: list[int], rec: _Record) -> Callable[[dict], list[int]]:
+    """Bind an agent to the ``cabt`` ``agent(obs) -> list[int]`` contract,
+    timing each real decision into ``rec``.
+
+    Must be a plain closure, NOT a callable object: ``kaggle_environments``
+    inspects the agent with ``getfullargspec``, which rejects class
+    instances (that was the EXP-008 ``status=ERROR`` bug).
+    """
+
+    def _fn(obs: dict) -> list[int]:
         rov = obs.get("remainingOverageTime")
         if rov is not None:
-            self.last_overage = rov
+            rec.last_overage = rov
         if obs["select"] is None:  # deck-submission step, not a decision
-            return self._deck
+            return deck
         t0 = time.perf_counter()
-        choice = self._agent.choose(obs)
-        self.times.append(time.perf_counter() - t0)
+        choice = agent.choose(obs)
+        rec.times.append(time.perf_counter() - t0)
         return choice
+
+    return _fn
 
 
 def run_match(args, deck0: list[int], deck1: list[int], seed: int) -> dict:
@@ -133,11 +141,10 @@ def run_match(args, deck0: list[int], deck1: list[int], seed: int) -> dict:
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
     a0 = _build_seat0(args, deck0, deck1, seed)
     a1 = _build_seat1(args, deck1, deck0, seed)
-    s0 = _TimedSeat(a0, deck0)
-    s1 = _TimedSeat(a1, deck1)
+    rec0, rec1 = _Record(), _Record()
 
     t0 = time.perf_counter()
-    env.run([s0, s1])
+    env.run([_timed_fn(a0, deck0, rec0), _timed_fn(a1, deck1, rec1)])
     seconds = time.perf_counter() - t0
 
     reward0 = env.state[0]["reward"]
@@ -152,11 +159,11 @@ def run_match(args, deck0: list[int], deck1: list[int], seed: int) -> dict:
         "max_seconds": args.max_seconds,
         "overage_reserve": args.overage_reserve if args.policy == "C" else None,
         "moves_ahead": args.moves_ahead if args.policy == "C" else None,
-        "my_decisions": len(s0.times),          # M
-        "my_decision_times": [round(t, 4) for t in s0.times],
-        "my_cumulative": round(sum(s0.times), 3),
-        "my_final_overage": s0.last_overage,
-        "opp_decisions": len(s1.times),
+        "my_decisions": len(rec0.times),         # M
+        "my_decision_times": [round(t, 4) for t in rec0.times],
+        "my_cumulative": round(sum(rec0.times), 3),
+        "my_final_overage": rec0.last_overage,
+        "opp_decisions": len(rec1.times),
         "reward_0": reward0,
         "reward_1": reward1,
         "status_0": status0,
