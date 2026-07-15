@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 from itertools import combinations, islice
 
 from env import search_engine
@@ -194,6 +195,8 @@ def decide(
     c: float = DEFAULT_C,
     filler_card: int | None = None,
     rollout_policy=None,
+    max_seconds: float | None = None,
+    min_iterations: int = 1,
 ) -> list[int]:
     """Run SO-ISMCTS for one decision; return option indices to play.
 
@@ -207,11 +210,20 @@ def decide(
         my_deck_list: Our 60-card list.
         opponent_deck_list: Theirs when known (local matches).
         rng: Seeded RNG.
-        iterations: Simulations for this decision.
+        iterations: Simulation cap for this decision.
         c: UCB1 exploration constant.
         filler_card: Fallback for unknown opponent lists (ladder).
         rollout_policy: ``(state, rng) -> result``; None = uniform
             random (ADR-001 baseline). Guided policy = H2 arm.
+        max_seconds: Anytime wall-clock cap for this decision. When set,
+            the loop stops as soon as ``iterations`` **or** this budget
+            is exhausted, whichever comes first — used by the #27
+            time-budget policies. ``None`` (default) = pure fixed-work
+            search, byte-identical to the pre-#27 behaviour so H1–H7
+            results are unaffected.
+        min_iterations: Floor on completed iterations before the
+            wall-clock cap can trigger, so the root always has visited
+            children and ``best_action_by_visits`` returns a real move.
 
     Returns:
         Option indices for the real observation's option array.
@@ -220,7 +232,18 @@ def decide(
     root = InfoSetNode()
     root_moves = enumerate_moves(obs["select"])
 
-    for _ in range(iterations):
+    deadline = None if max_seconds is None else time.perf_counter() + max_seconds
+    for i in range(iterations):
+        # Anytime stop: honour the wall-clock deadline only after
+        # ``min_iterations`` completed, since ISMCTS returns the
+        # max-visit root move — any number of iterations is a valid
+        # (if weaker) decision, but zero is not.
+        if (
+            deadline is not None
+            and i >= min_iterations
+            and time.perf_counter() >= deadline
+        ):
+            break
         det = sample_determinization(
             obs, my_deck_list, opponent_deck_list, rng, filler_card
         )

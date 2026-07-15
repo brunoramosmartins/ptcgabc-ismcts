@@ -26,9 +26,28 @@ from search import ismcts
 from search.determinize import DeterminizationError
 from search.ucb import DEFAULT_C
 
+# Policy-C floor (t_floor): always run *some* search even when the bank
+# is nearly drained, so a valid root move exists and the agent degrades
+# to heuristic-speed play rather than forfeiting.
+MIN_MOVE_SECONDS = 0.05
+
 
 class ISMCTSAgent(Agent):
-    """SO-ISMCTS with uniform consistent determinization (ADR-001)."""
+    """SO-ISMCTS with uniform consistent determinization (ADR-001).
+
+    Time-budget policy (#27, EXP-008). By default the agent runs a fixed
+    ``iterations`` per decision (policy A — unchanged, so H1–H7 hold).
+    Two opt-in wall-clock policies keep it under Kaggle's per-agent
+    ``remainingOverageTime`` bank:
+
+    - **B (fixed cap):** set ``max_seconds_per_move`` — each decision
+      stops at ``iterations`` or that many seconds, whichever first.
+    - **C (adaptive):** set ``adaptive_budget=True`` — each decision
+      reads the live bank ``obs["remainingOverageTime"]`` and spends
+      ``(bank - overage_reserve) / budget_moves_ahead`` seconds. Re-read
+      every move, so the bank cannot go negative regardless of game
+      length or hardware speed (see ``notes/phase4-time-budget-calibration.md``).
+    """
 
     def __init__(
         self,
@@ -39,6 +58,11 @@ class ISMCTSAgent(Agent):
         rng: random.Random | None = None,
         filler_card: int | None = None,
         rollout_policy=None,
+        max_seconds_per_move: float | None = None,
+        adaptive_budget: bool = False,
+        overage_reserve: float = 60.0,
+        budget_moves_ahead: int = 40,
+        min_iterations: int = 1,
     ) -> None:
         self.my_deck_list = my_deck_list
         self.opponent_deck_list = opponent_deck_list
@@ -47,7 +71,29 @@ class ISMCTSAgent(Agent):
         self.rng = rng or random.Random()
         self.filler_card = filler_card
         self.rollout_policy = rollout_policy  # None = random (ADR-001)
+        self.max_seconds_per_move = max_seconds_per_move
+        self.adaptive_budget = adaptive_budget
+        self.overage_reserve = overage_reserve
+        self.budget_moves_ahead = budget_moves_ahead
+        self.min_iterations = min_iterations
         self.fallback_events: list[str] = []
+
+    def _budget_seconds(self, obs: dict) -> float | None:
+        """Wall-clock budget for this decision, or ``None`` for policy A.
+
+        Policy C (adaptive) splits the spendable bank over an estimated
+        number of remaining decisions; policy B returns the fixed cap.
+        """
+        if self.adaptive_budget:
+            remaining = obs.get("remainingOverageTime")
+            if remaining is None:
+                # Observation lacks the field (e.g. the raw sim.lib
+                # harness) — fall back to the fixed cap if any.
+                return self.max_seconds_per_move
+            spendable = remaining - self.overage_reserve
+            per_move = spendable / max(self.budget_moves_ahead, 1)
+            return max(MIN_MOVE_SECONDS, per_move)
+        return self.max_seconds_per_move
 
     def choose(self, obs: dict) -> list[int]:
         try:
@@ -60,6 +106,8 @@ class ISMCTSAgent(Agent):
                 c=self.c,
                 filler_card=self.filler_card,
                 rollout_policy=self.rollout_policy,
+                max_seconds=self._budget_seconds(obs),
+                min_iterations=self.min_iterations,
             )
         except (SearchApiError, DeterminizationError) as exc:
             turn = (obs.get("current") or {}).get("turn")

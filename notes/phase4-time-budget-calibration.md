@@ -33,26 +33,46 @@ board we were winning* — the worst possible way to drop a game. This is
 the open row "Per-match 10-min budget binds ISMCTS below useful sim
 count" in `docs/risk-register.md`, now being closed.
 
-## What actually binds
+## What actually binds (confirmed 2026-07-15 from `make("cabt")`)
 
-Kaggle's `cabt` runs under `kaggle_environments`, which enforces two
-distinct limits (exact values are a **precondition** to read from
-`make("cabt").configuration` — see EXP-008; the numbers below are the
-documented/empirical anchors):
+The precondition check read the real config, and it simplifies the
+problem to a **single** binding constraint:
 
-1. **Per-decision cap (`actTimeout`)** — a single `choose()` call that
-   exceeds it forfeits that step. Binds the *slowest single decision*.
-2. **Per-agent match bank (~600 s, "10-minute budget")** — cumulative
-   think time across the whole game, with a small overage allowance.
-   Binds the *sum* over all decisions. This is what EXP-007's TIMEOUT
-   rows hit (matches died at ~550–600 s of one agent's own time).
+```
+configuration: { episodeSteps: 1e7, actTimeout: 0, runTimeout: 2000 }
+observation:   { remainingOverageTime: 600 (per-agent, not shared), step, ... }
+```
+
+- **`actTimeout: 0`** — there is **no per-decision cap**. A single
+  `choose()` may take arbitrarily long without forfeiting that step. The
+  "per-decision < actTimeout" constraint the first draft registered is
+  therefore **vacuous** and is dropped.
+- **`remainingOverageTime`: default 600, per-agent** — the spec states:
+  *"agent is disqualified with TIMEOUT status when this drops below 0."*
+  Because `actTimeout = 0`, there is no free per-step time, so **every
+  second of thinking is drawn from this 600 s bank**. When it hits 0 the
+  agent forfeits. This is the single limit that binds, and it matches
+  EXP-007 exactly (matches died at ~550–600 s of one agent's own time).
+- **`runTimeout: 2000`** — a secondary hard cap on the *whole episode*
+  wall-clock ("not necessarily DONE"). In practice the per-agent 600 s
+  bank binds first (EXP-007 forfeits fired at ~1100 s total match time,
+  well under 2000), so we calibrate to 600 s and treat 2000 s as a
+  backstop.
+
+**The key enabler:** `remainingOverageTime` is in the agent's own
+observation every decision (`shared: false`). So the agent can read its
+*live* remaining budget and allocate accordingly — this makes an
+**adaptive, budget-aware** policy (C below) possible, not just a fixed
+guess. Confirmed: the obs our `choose()` receives carries
+`remainingOverageTime` and `step` alongside `select` / `current` /
+`search_begin_input`.
 
 Note: `scripts/smoke_ismcts.py` never forfeits because it drives the
 engine through the raw `sim.lib` C interface, which enforces **neither**
-limit. Only the `make("cabt")` path (`scripts/local_ladder.py`) enforces
-them — which is why the timeouts first appeared in EXP-007, not in
-1500+ prior smoke/mirror runs. Any calibration must be measured on the
-enforced path.
+limit and exposes no overage field. Only the `make("cabt")` path
+(`scripts/local_ladder.py`) enforces the bank — which is why the
+timeouts first appeared in EXP-007, not in 1500+ prior smoke/mirror
+runs. Any calibration must be measured on the enforced path.
 
 ## Cost model (the decomposition that makes this cheap)
 
@@ -86,54 +106,81 @@ analysis time from the measured $c$ spread).
 
 ### Solving for the operating point
 
-**Fixed-iteration policy.** Largest $\text{it}^\*$ with
+Since `actTimeout = 0`, only the cumulative constraint remains
+(540 s = 600 − 10 % margin):
 
-$$c(\text{it}^\*)\cdot p99[M] < 540\text{ s} \quad\text{and}\quad \max_\text{decision} c(\text{it}^\*) < \texttt{actTimeout} - \text{margin}.$$
+**A. Fixed-iteration policy.** Largest $\text{it}^\*$ with
 
-(540 s = 600 − 10 % margin.)
+$$c(\text{it}^\*)\cdot p99[M] < 540\text{ s}.$$
 
-**Per-move anytime-cap policy.** ISMCTS is anytime — the root move is
-`best_action_by_visits()` after *any* number of iterations. So cap each
+**B. Per-move anytime-cap policy.** ISMCTS is anytime — the root move is
+`best_action_by_visits()` after *any* number of iterations. Cap each
 decision at $t_{\text{move}}$ seconds (stop the loop when iterations
 **or** wall-clock is exhausted). Pick
 
-$$t_{\text{move}}^\* \cdot p99[M] < 540\text{ s} \quad\text{and}\quad t_{\text{move}}^\* < \texttt{actTimeout} - \text{margin},$$
+$$t_{\text{move}}^\* \cdot p99[M] < 540\text{ s},$$
 
-with the iteration cap set high (time binds first) on fast decisions and
-the clock binding on slow ones. This **bounds cumulative time by
-construction** — its forfeit risk does not depend on the tail of $M$,
-which is the fixed-iteration policy's failure mode.
+with a high iteration cap so the clock binds on expensive decisions and
+iterations bind on cheap ones. Cumulative time $\le t_{\text{move}}\cdot M$
+**by construction** — forfeit risk no longer depends on the tail of $M$,
+which is A's failure mode. Still needs a *predicted* $p99[M]$, which we
+only measured against our own four decks, not the real ladder field.
+
+**C. Adaptive budget-aware policy (recommended).** The agent reads its
+live bank $R = \texttt{remainingOverageTime}$ each decision and allocates
+
+$$t_{\text{move}} = \max\!\Big(t_{\text{floor}},\ \frac{R - R_{\text{reserve}}}{\hat m}\Big),$$
+
+where $\hat m$ is a conservative estimate of decisions remaining and
+$R_{\text{reserve}}$ (e.g. 60 s) is a never-spend cushion. Re-reading $R$
+every move makes this **self-correcting**: if $\hat m$ is too low and the
+agent overspends early, $R$ shrinks and later budgets shrink with it, so
+the bank **cannot go negative** regardless of true game length or
+hardware speed. As $R \to R_{\text{reserve}}$ the per-move budget decays
+to $t_{\text{floor}}$ (search collapses toward the heuristic-speed floor)
+— graceful degradation instead of a forfeit. Crucially, C needs **no
+prediction of $M$**: it measures its own remaining budget live, so the
+"unknown ladder $M$" threat that limits A and B disappears.
 
 ## Policy candidates & pre-registered decision rule
 
-| policy | forfeit safety | strength profile |
-|---|---|---|
-| **A. fixed iters** | safe *in expectation*; forfeits on a long-$M$ game | constant work/decision |
-| **B. per-move time cap** | safe *by construction* (cumulative ≤ $t_{\text{move}}\cdot M$) | variable work; more iters on cheap decisions, fewer on expensive ones |
+| policy | forfeit safety | needs $M$ prediction? | strength profile |
+|---|---|---|---|
+| **A. fixed iters** | safe *in expectation*; forfeits on a long-$M$ game | yes | constant work/decision |
+| **B. per-move time cap** | safe *by construction* ($\le t_{\text{move}} M$) | yes (for $t_{\text{move}}^\*$) | more iters on cheap decisions |
+| **C. adaptive (budget-aware)** | safe *by construction*; cannot deplete the bank | **no** — reads live $R$ | most iters early, decays as bank drains |
 
-**Decision rule (registered in EXP-008):** among policies meeting both
-hard constraints (per-decision < `actTimeout` − margin; cumulative p99 <
-540 s), choose the one with the highest strength at its operating point
-(win rate vs the fixed heuristic reference, supplied by #26/H3). **Prefer
-B when its strength overlaps A's in Wilson 95 % CI**, because A forfeits
-on a single long game whereas B cannot. Ship the winner as the #29
-submission budget.
+**Decision rule (registered in EXP-008):** among policies whose measured
+cumulative **p99 < 540 s** with **0 forfeits** in the confirmation run,
+choose the highest strength at the operating point (win rate vs the fixed
+heuristic reference, from #26/H3). **Prefer C, then B, over A when
+strengths overlap in Wilson 95 % CI** — C and B are safe by construction
+where A forfeits on a single long game, and C additionally needs no $M$
+prediction, making it robust to the unknown ladder field. Ship the winner
+as the #29 submission budget.
 
 ## Measurement plan
 
-1. **Confirm the limits.** Read `actTimeout`, agent overage bank,
-   `runTimeout` from `make("cabt").configuration`. Anchor the 540 s
-   target to the real bank, not the documented estimate.
+1. **Confirm the limits.** ✅ Done 2026-07-15: `actTimeout = 0`,
+   `runTimeout = 2000`, per-agent `remainingOverageTime = 600`. Target
+   anchored to the real 600 s bank (540 s with 10 % margin); the
+   per-decision constraint is dropped (`actTimeout = 0`).
 2. **Instrument (code, reviewed, tests not run):**
+   - `search/ismcts.py::decide` gains an optional `max_seconds` (anytime
+     stop: break the loop when `iterations` **or** the wall-clock
+     deadline is hit, always running ≥ `min_iterations` so a valid root
+     move exists). Zero behaviour change when `max_seconds is None`
+     (current default) → H1–H7 results untouched.
+   - `ISMCTSAgent` gains the budget policy: `max_seconds_per_move` (B)
+     and `adaptive_budget` + `overage_reserve` + `budget_moves_ahead`
+     (C, reads `obs["remainingOverageTime"]`). Default = neither → pure
+     iterations (A).
    - `scripts/exp_timing.py` — extends `smoke_ismcts.py`'s per-decision
      timer to record, per game: every ISMCTS decision time, the
-     per-agent cumulative, and the decision count $M$. Runs on the
-     enforced `make("cabt")` path so forfeits are observable. Writes
-     one JSON line per game to `results/exp008_*.jsonl` (gitignored).
-   - Optional per-move cap in `search/ismcts.py::decide` (and threaded
-     through `ISMCTSAgent`): `deadline = perf_counter() + t_move`; break
-     the iteration loop when reached. Zero behaviour change when
-     `t_move is None` (current default), so H1–H7 results are untouched.
+     per-agent cumulative, the final `remainingOverageTime`, and the
+     decision count $M$. Runs on the enforced `make("cabt")` path so
+     forfeits are observable. Writes one JSON line per game to
+     `results/exp008_*.jsonl` (gitignored).
 3. **Fit $c(\text{it})$** over iters ∈ {300, 600, 1000, 1500}, ~5
    games/matchup, all four opponent decks; report $\alpha,\beta,R^2$.
 4. **Estimate $M$** from the low-iter games (fast) across the four
@@ -150,9 +197,11 @@ submission budget.
   margin and, ideally, running the confirmation inside the Kaggle Docker
   image before #29 (cross-ref the submission-log validation step).
 - **$M$ against the real ladder field is unknown.** Our four decks are a
-  proxy; a pathological opponent could push $M$ higher. The per-move cap
-  (B) is robust to this by construction — an argument for B beyond the
-  point estimate.
+  proxy; a pathological opponent could push $M$ higher, breaking A's and
+  B's $p99[M]$-based safety margins. **Policy C removes this threat
+  entirely** — it allocates from the live bank and never predicts $M$, so
+  an unexpectedly long game just shrinks its per-move budget. This is the
+  decisive argument for C over A/B beyond any point estimate.
 - **Per-decision cost is not perfectly constant** (branching factor
   varies with board state). If the measured $c$ spread is wide, switch
   from point-estimate multiplication to sampling $c\cdot M$ from the

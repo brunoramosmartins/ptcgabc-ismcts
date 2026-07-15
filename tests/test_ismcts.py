@@ -92,6 +92,37 @@ def test_one_determinization_per_iteration_and_end_called(fake_engine) -> None:
     assert fake_engine.end_calls == 1
 
 
+# --- anytime wall-clock cap (#27 / EXP-008) ---------------------------------
+
+def test_max_seconds_none_runs_full_iterations(fake_engine) -> None:
+    # Default path: no time cap → exactly `iterations` simulations,
+    # byte-identical to pre-#27 behaviour (protects H1–H7 results).
+    decide(_root_obs(), my_deck_list=[], opponent_deck_list=[],
+           rng=random.Random(0), iterations=30, max_seconds=None)
+    assert fake_engine.begin_calls == 30
+
+
+def test_max_seconds_zero_stops_after_min_iterations(fake_engine) -> None:
+    # An already-expired budget must still run `min_iterations` so the
+    # root has visited children and returns a valid move.
+    choice = decide(
+        _root_obs(), my_deck_list=[], opponent_deck_list=[],
+        rng=random.Random(0), iterations=1000,
+        max_seconds=0.0, min_iterations=3,
+    )
+    assert fake_engine.begin_calls == 3
+    assert fake_engine.end_calls == 1        # engine still cleaned up
+    assert choice in ([0], [1])              # valid, if possibly weaker
+
+
+def test_generous_budget_does_not_cut_iterations(fake_engine) -> None:
+    # A budget far larger than the (trivial fake) work must not trigger.
+    decide(_root_obs(), my_deck_list=[], opponent_deck_list=[],
+           rng=random.Random(0), iterations=20,
+           max_seconds=60.0, min_iterations=1)
+    assert fake_engine.begin_calls == 20
+
+
 # --- enumerate_moves (pure) -------------------------------------------------
 
 def test_enumerate_moves_single_pick() -> None:
