@@ -190,6 +190,34 @@ as the #29 submission budget.
    matchups, N seeds, asserting **0 forfeits** and reporting the
    realized cumulative-time p99.
 
+## Fit results (2026-07-15)
+
+76 games via `run_exp008.sh fit`, analysed with `analyze_exp008.py`:
+
+- **Cost model:** $c(\text{it}) = 101\text{ ms} + 4.85\text{ ms}\cdot\text{it}$
+  ($R^2 = 0.536$). Per-decision median: 1.56 / 2.80 / 4.32 / 7.93 s at
+  300 / 600 / 1000 / 1500 iters. The moderate $R^2$ is the per-decision
+  spread (board complexity) the model warned about — the *trend* is
+  clean but any single decision can be well above the mean.
+- **$M$ (decisions/agent/game):** pooled median 23, observed max 69;
+  per opponent p99 ≈ 65 (aggro-fire), 69 (emboar), 63 (v1-tuned), 40
+  (mirror). Long games come from the Fire grinds, as expected.
+- **Fixed-iteration is rejected.** The naive $c_\text{mean}\cdot p99[M]$
+  bound says it* ≈ 1591 is "safe", yet EXP-007 forfeited at **1000**
+  fixed iters. The gap is the joint tail: a forfeit needs a long game
+  **and** costly decisions in the *same* game, which multiplying a mean
+  cost by a marginal $p99[M]$ misses. The fit's 0/76 forfeits only
+  reflect too-few games at the high-iter levels, not safety. This is the
+  concrete case for the adaptive policy over any fixed budget.
+- **Chosen operating point (Policy C), pre-registered before the confirm
+  run:** `overage_reserve = 60`, `budget_moves_ahead = 80`. Rationale:
+  80 > observed max $M$ (69) with margin for a longer ladder game; the
+  full-bank per-move budget is $(600-60)/80 = 6.75$ s ≈ 1370 iters,
+  above the EXP-003 1000-iter baseline, and it decays gracefully as the
+  bank drains. The bank cannot go negative by construction, so this is
+  safe even if Kaggle's hardware is slower than local WSL (slower
+  hardware costs *strength*, never a forfeit).
+
 ## Threats to validity (to watch)
 
 - **Local hardware ≠ Kaggle worker.** WSL2 timings are a proxy; the
