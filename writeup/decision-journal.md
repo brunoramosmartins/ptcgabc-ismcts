@@ -258,6 +258,39 @@ Two consequences decided today:
    testable question — it goes into the Phase 4 tuning work (#26/#27)
    rather than being smuggled into the H2 verdict.
 
+### 2026-07-15 — Deck selected (ADR-002): the control won, on two axes
+
+EXP-007 finished: 600 matches, 0 fallbacks, 0 draws. By the
+pre-registered maximin rule, **`current-v1` (the Phase-0 sample list) is
+the selected deck** — worst-case matchup 0.66 vs 0.34 / 0.09 / 0.13 for
+the three designed candidates, and it dominates all of them head-to-head.
+No candidate cleared the replacement gate (best challenger 34/100 vs
+current-v1), so the deck is unchanged. Written up in
+`docs/adr/adr-002-why-this-deck.md`.
+
+Three things worth recording as decisions, not just results:
+
+1. **Accepting a null-change outcome without moving the goalposts.**
+   The tempting narrative for a "deck selection phase" is that it must
+   *produce a new deck*. It didn't, and that is the correct result:
+   the control was included precisely so the phase could conclude "the
+   placeholder is actually good" with evidence. The dividend is concrete
+   — because the deck is unchanged, EXP-002–006 need no re-baselining.
+2. **A second, independent axis (compute cost) is allowed to reinforce,
+   not launder, the decision.** `current-v1` is both the maximin winner
+   *and* the cheapest to pilot (0.7 % timeout / 196 s median vs 20–24 % /
+   ~530 s for the Fire decks). Under Kaggle's fixed-*time* budget the
+   cost axis matters on its own, but I recorded it as *corroborating* the
+   maximin choice rather than as the primary criterion — the primary
+   criterion was fixed before the run and I'm not swapping it now that a
+   second signal happens to agree.
+3. **Timeouts logged as a finding and routed to #27, not written off.**
+   The env-error rows are engine per-match TIMEOUTs (forfeit, valid),
+   concentrated in the slow Fire matchups. They are the first hard
+   evidence that iteration count must be *time*-calibrated so a slow
+   board never forfeits — exactly the H3/time-budget question. Filed
+   against #27 rather than buried in the deck verdict.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs
@@ -278,7 +311,7 @@ Two consequences decided today:
   clamps, crashed without. Also exposed: the wall-clock estimate for
   asymmetric matchups was ~6× optimistic (median 106–258 s/match vs
   ~30 s mirror — longer games, more decisions per game).
-- **v1-tuned's "obvious" fixes backfired (partial, 12W–38L vs
+- **v1-tuned's "obvious" fixes backfired (final EXP-007: 34/100 vs
   current-v1).** Cutting energy 35→27 to add trainers weakened
   exactly what makes the sample deck work: Hammer-lanche's damage
   scales with deck energy *density* (discard 6 from top, 100× per

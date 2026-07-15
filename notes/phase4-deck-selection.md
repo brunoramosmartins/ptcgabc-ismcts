@@ -2,8 +2,8 @@
 
 Goal: replace the Phase-0 placeholder deck with a deliberately chosen
 list before the Simulation deadline (Aug 16-17), using local evidence
-rather than internet meta. Output: `decks/selected/deck.csv` (v2) plus
-`docs/adr/adr-002-deck-selection.md` recording the decision.
+rather than internet meta. Output: `decks/selected/deck.csv` plus
+`docs/adr/adr-002-why-this-deck.md` recording the decision.
 
 ## Why not the internet meta
 
@@ -92,7 +92,7 @@ faster median match time (search budget stretches further).
 
 ### Step 5 — Record and switch
 
-- Write `docs/adr/adr-002-deck-selection.md` (context, candidates,
+- Write `docs/adr/adr-002-why-this-deck.md` (context, candidates,
   round-robin table with CIs, decision, consequences).
 - Update `decks/selected/deck.csv` + `rationale.md`.
 - Note the interaction with EXP-006/H2: any experiment comparing
@@ -143,10 +143,63 @@ already covered by emboar-evolution.
   (unlimited {R} attach from hand) — an energy-accel engine if a
   future candidate wants it.
 
+## Result (2026-07-15)
+
+EXP-007 complete: 600 matches, 0 fallbacks, 0 draws. **`current-v1`
+selected** by the pre-registered maximin rule — worst-case matchup
+**0.66** (vs v1-tuned), against 0.34 / 0.09 / 0.13 for the others; it
+also dominates all three rivals head-to-head. The ranking is robust to
+timeout handling (0.66 / 0.34 / 0.08 / 0.11 excluding timeout rows).
+No candidate beats `current-v1` (replacement gate never fires), so the
+selected deck is unchanged. Full write-up in
+`docs/adr/adr-002-why-this-deck.md`.
+
 ## Lessons Learned
 
-_(pending: fill at phase close)_
+- **The control won — and that is a clean, defensible outcome, not a
+  wasted phase.** Three deliberately designed candidates each lost to
+  the Phase-0 sample list. Including `current-v1` as a control (rather
+  than assuming any designed deck must beat a placeholder) is what let
+  the round-robin *prove* the sample deck is good rather than replace it
+  on faith. It also means EXP-002–006 stay valid on the unchanged deck —
+  no agent re-baselining needed.
+- **Maximin is the right criterion for an unknown opponent field, and it
+  changed nothing vs "best average" here — but that is luck, not
+  vindication.** `current-v1` happened to be both the most robust and the
+  strongest on average. The rule earns its keep only when those diverge;
+  keeping it pre-registered means the next deck decision can't be
+  rationalized after the fact.
+- **A second, independent axis (compute cost) pointed at the same deck.**
+  Kaggle scores at fixed *time*; `current-v1` runs at 196 s median vs
+  530 s for the Fire decks and forfeits 0.7 % of games vs 20–24 %. When
+  the robustness winner is also the cheapest to pilot, confidence in the
+  choice is much higher than either signal alone.
+- **Card scaling engines dominate generic deckbuilding intuition.**
+  v1-tuned's energy cut looked like textbook consistency improvement and
+  backfired because it starved Hammer-lanche's density scaling. Read what
+  the deck's key attack actually multiplies before "fixing" its ratios.
 
 ## Failed Attempts
 
-_(pending: fill at phase close)_
+- **v1-tuned: "fixing" the ratios weakened the core (34/100 vs
+  current-v1).** Cutting {W} energy 35 → 27 to fit more trainers reduced
+  Hammer-lanche's damage (Mega Abomasnow ex scales 100× per {W} in the
+  top 6 discarded), the exact engine that makes the sample list work.
+  The intended lesson — "isolate archetype vs ratios" — landed, just in
+  the opposite direction to the design hypothesis.
+- **aggro-fire: zero setup did not buy consistency (worst-case 0.09).**
+  The hypothesis was that skipping evolution trades ceiling for a stable
+  floor. Instead it posted the worst worst-case in the field and a
+  24.3 % timeout rate — fast to *set up* is not fast to *close*, and the
+  grindy Fire mirror is where the time-budget forfeits pile up.
+- **emboar-evolution: highest ceiling, worst practical floor.** Mega
+  Emboar ex has the pool's top damage (320/380 HP) but the Stage-2 line's
+  setup tax gives it worst-case 0.13 and a 20.7 % timeout rate. Exactly
+  the profile the maximin rule exists to reject.
+- **Wall-clock estimate was ~6× optimistic.** The "≈ 5 h" figure in Step
+  3 was extrapolated from mirror timings; asymmetric matchups run far
+  longer (the Fire cells hit the per-match TIMEOUT at ~1000–1200 s), so
+  the real round-robin took the better part of a day, resumed across
+  sessions. The resumable runner (`--append`, skip-completed) made this a
+  non-issue operationally, but the estimate itself was wrong — asymmetric
+  games are longer *and* more variable than mirrors.
