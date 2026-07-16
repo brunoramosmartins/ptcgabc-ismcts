@@ -291,6 +291,57 @@ Three things worth recording as decisions, not just results:
    board never forfeits — exactly the H3/time-budget question. Filed
    against #27 rather than buried in the deck verdict.
 
+### 2026-07-16 — Submission budget locked: adaptive, not fixed (EXP-008, #27)
+
+EXP-008 closed. The #29 submission will run `adaptive_budget=True`,
+`overage_reserve=60`, `budget_moves_ahead=80`. Confirmed over 80 games
+(4 opponents × 20 seeds): **0 forfeits, cumulative p99 310.7 s** against
+the pre-registered 540 s gate. The risk-register row that EXP-007 had
+marked *materialized* is now mitigated.
+
+**Key non-trivial decisions.**
+
+1. **Check the environment's real limits before designing around them.**
+   The first draft registered "per-decision cost < `actTimeout` − margin"
+   as a hard constraint. `actTimeout` is **0** — no per-decision cap
+   exists, and a whole branch of the protocol was sizing a limit that is
+   not there. The same check found `remainingOverageTime` sitting in our
+   own observation, which is what made an adaptive policy possible at all.
+   The check that deleted a constraint is the one that produced the answer.
+2. **Adaptive (C) over fixed iterations (A), for a structural reason
+   rather than a measured margin.** A and B both need $p99[M]$ — a
+   prediction about a ladder field we have never seen. C reads the live
+   bank and cannot deplete it by construction, so an unexpectedly long
+   game costs *strength* instead of the match. This is the same shape of
+   argument as ADR-002's maximin: prefer the option whose worst case is
+   bounded over the one whose average is better.
+3. **The fit stage's headline number was computed and then discarded.**
+   $c_\text{mean} \cdot p99[M]$ says 1591 fixed iterations is "safe";
+   EXP-007 had already forfeited at 1000. Multiplying a mean by a marginal
+   quantile assumes independence, but a forfeit needs a long game **and**
+   costly decisions *in the same game*. The regression's real value was
+   making the case against fixed budgets quantitative — a registered
+   negative result, not wasted work.
+4. **Operating point pre-registered before the confirmation run.**
+   `reserve=60`, `moves-ahead=80` went into the registry and the protocol
+   note on 2026-07-15, before a single confirm game ran. It held: pooled
+   max $M$ came in at 68, just under the 80. Choosing it afterwards would
+   have been fitting the guard to the data it was meant to guard against.
+5. **The mirror result logged as a lead, not a finding.** In the mirror
+   cell both seats play `current-v1`, so the only difference is Policy C
+   vs fixed 1000 iters — C wins 0.75, Wilson [0.53, 0.89]. Tempting to
+   claim the adaptive budget buys strength. But $n = 20$, it was not
+   pre-registered, and seat order is unbalanced, so first-player advantage
+   confounds it in the same direction. Routed to #26/H3 to be tested
+   properly instead of banked as a result.
+6. **Accepting a policy that leaves most of the bank unspent.** Because
+   `budget_moves_ahead` is constant, the divisor never shrinks: the worst
+   game finished with 292 s unused and the median leaves ~80 %. That is the
+   right trade before a deadline — a forfeit is a certain loss, unspent
+   seconds are only foregone strength — but it is recorded as a Phase-5
+   lever (a decaying estimate of *remaining* moves would spend more at the
+   same safety), not as a tuning job for August.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs
@@ -344,3 +395,30 @@ Three things worth recording as decisions, not just results:
   `/kaggle_simulations/agent` + CWD); validator now loads by path and
   reproduces the exec. Timing was never the problem — self-play is ~45 s
   local, worker banks 600 s overage/agent/episode.
+- **EXP-008's timing wrapper was a callable class — one full collection
+  run lost, and the check that should have caught it reported success.**
+  `_TimedSeat` implemented `__call__`; `kaggle_environments` introspects
+  agents with `inspect.getfullargspec`, which raises `TypeError` on class
+  instances, so both seats errored before taking a single decision. All 76
+  fit games and 30 confirm games came back `status=ERROR`, `M=0`,
+  `my_final_overage=None`. The output looked plausible — the only tell was
+  a per-decision median of 0.000 s. What let it survive was the same
+  disease as the `__file__` incident above, in a new organ: the forfeit
+  check searched for `TIMEOUT` while the status was `ERROR`, so it printed
+  **"forfeits 0/30" — a false pass**. A check that cannot distinguish
+  *passed* from *never ran* is not a check. Compounding it, `run_cell`
+  resumes by counting lines, so the poisoned files would have been skipped
+  as "complete" forever; they had to be deleted by hand. Fixed with a plain
+  closure, a regression test that runs `getfullargspec` on the wrapper
+  (`tests/test_exp_timing.py`), and an integrity guard in
+  `analyze_exp008_confirm.py` that fails loudly on any non-outcome status
+  before it evaluates a single gate. `local_ladder.py` was never affected —
+  it already returned a closure, which is why 1,500+ prior matches ran
+  clean and gave no warning.
+- **Reading a tail from the first four lines of a running log.** An early
+  read of the confirm output put budget utilization at ~19 % and prompted a
+  "we're leaving strength on the table" claim. Over all 80 games the worst
+  case is 58 %. The four visible lines were one opponent's fast seeds; the
+  expensive matchup (aggro-fire, $M$ up to 68) had not printed yet. Same
+  error as the fit stage's reassuring 0/76 forfeits — a tail statistic read
+  off a sample that structurally cannot contain the tail.

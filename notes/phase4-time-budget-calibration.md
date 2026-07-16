@@ -218,6 +218,49 @@ as the #29 submission budget.
   safe even if Kaggle's hardware is slower than local WSL (slower
   hardware costs *strength*, never a forfeit).
 
+## Confirm results (2026-07-16) — Policy C passes both gates
+
+80 games (4 opponents × 20 paired seeds, iters-cap 100 000 so wall-clock
+and not iterations binds, opponent `ismcts` at 1000 fixed iters), 1454
+decisions, analysed with `analyze_exp008_confirm.py`:
+
+| opponent | n | forfeits | cum p99 | bank floor | $M$ max | per-dec median | win |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| aggro-fire | 20 | 0 | 310.7 s | 292.2 s | 68 | 5.96 s | 0.85 |
+| v1-tuned | 20 | 0 | 283.1 s | 320.1 s | 59 | 5.95 s | 0.70 |
+| emboar-evolution | 20 | 0 | 188.0 s | 416.4 s | 34 | 6.03 s | 0.90 |
+| current-v1 (mirror) | 20 | 0 | 165.1 s | 439.6 s | 29 | 6.26 s | 0.75 |
+
+- **Gate 1 — 0 forfeits: PASS** (0/80).
+- **Gate 2 — cumulative p99 < 540 s: PASS** (310.7 s). At $n = 80$ the
+  nearest-rank p99 *is* the maximum, so 310.7 s is the literal worst game,
+  not an interpolated quantile — 229.3 s of headroom.
+- **The pre-registered guess held.** Pooled max $M$ = 68, just under the
+  $\hat m = 80$ chosen from the fit stage's observed max of 69. Had the
+  ladder produced a 90-move game, Policy C would have shrunk its per-move
+  budget rather than forfeited — which is the entire point of C over A/B.
+- **The bank model is exact.** Engine drawdown minus measured think-time
+  has median *and* worst-case residual of **+0.00 s across all 80 games**.
+  Every second we spend thinking is charged to the bank, and nothing else
+  is. This retires the "what if the engine charges for something we don't
+  measure" worry outright.
+- **Per-decision cost sits at the cap.** Medians of 5.95–6.26 s against
+  the full-bank ceiling of $(600-60)/80 = 6.75$ s: early decisions spend
+  the cap and later ones taper as the bank drains, exactly the graceful
+  decay C was designed for. (The observed per-decision max of 6.758 s
+  overshoots the cap by 8 ms because `decide()` checks the deadline
+  *between* iterations — expected, not a leak.)
+
+**Descriptive strength signal, and why it is not a verdict.** In the
+mirror cell both seats play `current-v1`, so the sole difference is the
+budget policy: Policy C (≈1370 iters at full bank, decaying) against a
+fixed 1000 iters. C wins 0.75, Wilson 95 % CI [0.53, 0.89] — lower bound
+above 0.5. Read literally, the adaptive budget buys *strength*, not just
+forfeit-immunity. Read honestly, this is $n = 20$, was not pre-registered,
+and seat order is unbalanced, so first-player advantage is an uncontrolled
+confound sitting in the same direction. It is a lead for #26/H3, not a
+result.
+
 ## Threats to validity (to watch)
 
 - **Local hardware ≠ Kaggle worker.** WSL2 timings are a proxy; the
@@ -237,8 +280,81 @@ as the #29 submission budget.
 
 ## Lessons Learned
 
-_(pending: fill at phase close.)_
+- **Read the config before designing around it.** The first draft of
+  EXP-008 registered "per-decision cost < `actTimeout` − margin" as a hard
+  constraint. `actTimeout` is **0** — there is no per-decision cap, and the
+  constraint was vacuous. An entire branch of the protocol was optimizing a
+  limit that does not exist. The same five-minute check paid for itself
+  twice over: it also surfaced that `remainingOverageTime` is delivered in
+  the agent's own observation, which is what made Policy C possible. The
+  check that deleted a constraint is the one that produced the answer.
+- **An observable constraint beats a predicted one.** Policies A and B both
+  need $p99[M]$ — a prediction about a ladder field we have never seen.
+  Policy C reads the live bank and needs no prediction at all. The fit
+  stage's real payoff was not the number it produced ($\text{it}^\* \approx
+  1591$) but the proof that the number could not be trusted. We ran a
+  quantitative stage and its most valuable output was a *disqualification*.
+- **Point estimates hide joint tails.** $c_\text{mean} \cdot p99[M]$ said
+  1591 iters was safe; EXP-007 had already forfeited at 1000. Multiplying a
+  mean cost by a marginal quantile silently assumes the two are
+  independent, when a forfeit specifically requires a long game **and**
+  expensive decisions *in the same game*. The correct object is the
+  quantile of the product, not the product of the summaries.
+- **Zero events in a small sample is not evidence of safety.** The fit
+  stage reported 0/76 forfeits and it meant nothing — only 3 games per
+  opponent ran at the high-iteration levels, which is where forfeits live.
+  A null needs its sample size attached or it is decoration. The same rule
+  in reverse: 4 log lines from one opponent are not the tail either; an
+  early read of the confirm data suggested ~19 % budget utilization, and
+  the true worst case over all 80 games is 58 %.
+- **Decomposition beat brute force.** $T \approx c(\text{it}) \cdot M$ with
+  $M$ iteration-independent let us measure $c$ from a handful of games
+  (each yielding dozens of decisions) and $M$ from many cheap low-iter
+  games, then *predict* the expensive tail instead of running it.
+  Brute-forcing high-iteration full games directly would have cost days of
+  wall-clock we did not have.
+- **The conservatism has a price, and it is worth naming.** Because
+  `budget_moves_ahead` is a *constant* 80, the divisor never shrinks as a
+  game progresses: even the 68-move worst case ended with 292 s unspent,
+  and the median game leaves roughly 80 % of the bank on the table. That is
+  the correct trade for #29 — a forfeit is a certain loss, unspent seconds
+  are only foregone strength — but it is a real lever. A decaying estimate
+  of *remaining* moves would spend more of the bank for the same safety
+  guarantee, which is a Phase-5 idea rather than a pre-deadline one.
+- **A resumable runner needs a whole-corpus analyzer.** `exp_timing.py`
+  prints a summary of the games *it* just ran; after a resume that was 9
+  games, not the 80 in the files. Read as a verdict it would have reported
+  p99 = 183.6 s instead of 310.7 s. Resumability and reporting are separate
+  concerns and must not share a code path.
 
 ## Failed Attempts
 
-_(pending: fill at phase close.)_
+- **The timing wrapper as a callable class (2026-07-15) — cost: one full
+  collection run.** `_TimedSeat` was an object with `__call__`.
+  `kaggle_environments` introspects agents with
+  `inspect.getfullargspec`, which raises `TypeError` on class instances, so
+  both seats errored before taking a single decision. Every row of all 76
+  fit games and 30 confirm games came back `status=ERROR`, `M=0`,
+  `my_final_overage=None` — and the data *looked plausible* at a glance.
+  The tell was a per-decision median of 0.000 s. Two compounding failures
+  made it survive as long as it did: the forfeit check searched for
+  `TIMEOUT` and the status was `ERROR`, so "0 forfeits" was a **false
+  positive** — a check that cannot distinguish *passed* from *never ran* is
+  not a check; and `run_cell` resumes by counting lines, so the poisoned
+  files would have been skipped as "complete" forever. They had to be
+  deleted by hand. Fixed with a plain closure (`_timed_fn`), a regression
+  test that runs `getfullargspec` on the wrapper
+  (`tests/test_exp_timing.py`), and an integrity guard in
+  `analyze_exp008_confirm.py` that fails loudly on any non-outcome status.
+  `local_ladder.py` was never affected — it already returned a closure.
+- **The `actTimeout` constraint (registered, then dropped as vacuous).**
+  See Lessons Learned. Recorded here rather than quietly deleted because
+  the registry showed a hard constraint that never existed, and the
+  correction is only visible if the mistake stays on the record.
+- **Fixed-iteration budgets (A), rejected after being fitted.** The whole
+  $c(\text{it})$ regression was run to size a fixed budget, and its answer
+  was discarded — not because the fit was wrong ($R^2 = 0.536$ over 1960
+  decisions is a clean trend) but because the quantity it estimates is the
+  wrong one for a forfeit question. Kept as a registered negative result:
+  the fit is what makes the case against fixed budgets quantitative rather
+  than hand-waved.
