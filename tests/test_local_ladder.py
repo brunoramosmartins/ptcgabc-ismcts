@@ -28,6 +28,48 @@ def test_agent_registry_has_all_arms() -> None:
     assert "random" in AGENT_REGISTRY
     assert "heuristic" in AGENT_REGISTRY
     assert "ismcts" in AGENT_REGISTRY
+    assert "ismcts-filler" in AGENT_REGISTRY
+
+
+def test_ismcts_filler_discards_the_opponent_list() -> None:
+    # EXP-009's entire treatment is *not* knowing the opponent's deck. If
+    # this arm leaked opp_deck through, the experiment would silently be a
+    # rerun of EXP-003, report "no gap", and we would conclude the exact
+    # opposite of the truth about filler determinization.
+    agent = AGENT_REGISTRY["ismcts-filler"](1, DECK, DECK_B, 10)
+    assert agent.opponent_deck_list is None
+    assert agent.filler_card is not None
+
+
+def test_ismcts_filler_differs_from_ismcts_only_in_determinization() -> None:
+    informed = AGENT_REGISTRY["ismcts"](1, DECK, DECK_B, 10)
+    filler = AGENT_REGISTRY["ismcts-filler"](1, DECK, DECK_B, 10)
+    # The control knows the list; the treatment does not. Everything the
+    # comparison is meant to hold fixed must actually be fixed.
+    assert informed.opponent_deck_list == DECK_B
+    assert filler.opponent_deck_list is None
+    assert filler.my_deck_list == informed.my_deck_list
+    assert filler.iterations == informed.iterations
+    assert filler.rollout_policy is informed.rollout_policy  # both random
+    assert filler.adaptive_budget == informed.adaptive_budget
+    assert filler.max_seconds_per_move == informed.max_seconds_per_move
+
+
+def test_filler_card_is_pinned_to_the_submission_shim() -> None:
+    # The arm reproduces the ladder only if it fills with the same card the
+    # ladder agent fills with. A drift here would make EXP-009 measure a
+    # condition nothing is actually deployed under.
+    import re
+
+    from scripts.local_ladder import LADDER_FILLER_CARD
+
+    shim = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / "submissions" / "ismcts_main.py"
+    ).read_text()
+    match = re.search(r"^FILLER_CARD = (\d+)", shim, re.MULTILINE)
+    assert match, "submissions/ismcts_main.py no longer defines FILLER_CARD"
+    assert int(match.group(1)) == LADDER_FILLER_CARD
 
 
 def test_sign_helper() -> None:

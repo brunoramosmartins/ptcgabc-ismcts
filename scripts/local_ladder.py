@@ -55,6 +55,11 @@ from stats.wilson import wilson_interval  # noqa: E402
 # agents ignore what they don't need.
 AgentBuilder = Callable[[int, list[int], list[int], int], Agent]
 
+# Pinned to submissions/ismcts_main.py::FILLER_CARD. The `ismcts-filler`
+# arm only means something if it fills hidden zones with the same card the
+# ladder agent does; tests/test_local_ladder.py asserts they agree.
+LADDER_FILLER_CARD = 1072  # Snorlax — a Basic, legal in the active slot
+
 
 def _random_builder(seed: int, my_deck: list[int], opp_deck: list[int],
                     iterations: int) -> Agent:
@@ -75,6 +80,32 @@ def _ismcts_builder(seed: int, my_deck: list[int], opp_deck: list[int],
         opponent_deck_list=opp_deck,
         iterations=iterations,
         rng=random.Random(seed),
+    )
+
+
+def _ismcts_filler_builder(seed: int, my_deck: list[int],
+                           opp_deck: list[int], iterations: int) -> Agent:
+    """ISMCTS under the *deployment* condition: opponent list unknown.
+
+    Identical to `_ismcts_builder` in every respect except one — hidden
+    opponent zones are filled with `LADDER_FILLER_CARD` instead of being
+    sampled from their real list. That is exactly what
+    `submissions/ismcts_main.py` does on the ladder, where we never see
+    the opponent's deck.
+
+    The point of the arm is the contrast: `ismcts` minus `ismcts-filler`
+    on shared seeds is the price of not knowing the opponent's list
+    (EXP-009). `opp_deck` is discarded on purpose — discarding it *is*
+    the treatment, so the unused argument is the experiment, not an
+    oversight.
+    """
+    del opp_deck  # the treatment: pretend we never saw it
+    return ISMCTSAgent(
+        my_deck_list=my_deck,
+        opponent_deck_list=None,
+        iterations=iterations,
+        rng=random.Random(seed),
+        filler_card=LADDER_FILLER_CARD,
     )
 
 
@@ -114,6 +145,7 @@ AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "random": _random_builder,
     "heuristic": _heuristic_builder,
     "ismcts": _ismcts_builder,
+    "ismcts-filler": _ismcts_filler_builder,   # EXP-009: deployment condition
     "ismcts-guided": _ismcts_guided_builder,   # H2 treatment arm
     "pimc": _pimc_builder,
     "oracle": _oracle_builder,   # LOCAL DIAGNOSTIC ONLY — never submit
