@@ -342,6 +342,64 @@ marked *materialized* is now mitigated.
    lever (a decaying estimate of *remaining* moves would spend more at the
    same safety), not as a tuning job for August.
 
+### 2026-07-16 — The ladder disagrees with the benchmark, and it is not noise
+
+Submitted the adaptive-budget agent (row #4, Validation passed). Then the
+ladder numbers landed and reframed the phase.
+
+**The finding.** Measured simultaneously today: heuristic **497.8**, our
+ISMCTS **475.4** — the heuristic leads by 22.4. Every prior simultaneous
+read agrees (536.0 vs 522.3 at the last one). Three reads, one direction.
+Our ISMCTS loses to our own heuristic baseline on the ladder while beating
+it 78 % locally (EXP-003, H1 supported, Wilson [0.742, 0.814], n = 500).
+
+**H1 is not refuted, and saying so would be sloppy.** H1 was stated and
+tested under a mirror-deck condition, and it holds there. What we have is a
+**construct-validity gap**: the local benchmark grants the agent the
+opponent's list, and the deployment environment does not. The benchmark
+measures a quantity the ladder never pays for. That belongs in Threats to
+Validity as a first-class item, not as a caveat.
+
+**The mechanism was already registered, which is the encouraging part.**
+On the ladder, hidden zones are filled with `FILLER_CARD`, so the search
+plans deep inside a counterfactual board — and depth against a wrong model
+is not neutral, it is confidently wrong. EXP-004 found search itself
+carries the value (+24 pp) while the info-set tree adds little (+3.8 pp,
+n.s.); EXP-005 found the belief-refinement ceiling is only +4.8 pp and
+explicitly separated "better belief model" from "we don't know their
+list", flagging the second as open. The ladder is now pointing at exactly
+the item that analysis left open.
+
+**Key non-trivial decisions.**
+
+1. **Measure the noise floor before claiming a gap.** Row #2's agent is
+   deterministic and its code never changed, yet its rating moved
+   527.9 → 536.0 → 497.8. That ~38-point swing is the *ladder's*
+   non-stationarity, not ours, and it is the first honest scale for any
+   ladder claim. Consequence adopted: **absolute ratings are not comparable
+   across dates; only simultaneous differences are.** Every ladder claim in
+   the writeup must be a same-instant comparison.
+2. **Let row #4 be the experiment rather than pausing for one.** Rows #3
+   and #4 are active together on the same deck and stack, differing only in
+   budget policy — the one ladder comparison pool drift cannot confound.
+   Its three outcomes are registered in the submission log *before* any
+   rating arrives, read against the 38-point floor: #4 − #3 > +38 means
+   depth was underprovisioned; ≈ means budget is not the constraint; **< 0
+   means deeper search into filler is actively harmful**, which would be
+   the strongest evidence yet that determinization quality binds and would
+   redirect #29 away from "more search".
+3. **Do not reorder Phase 4 on a 7-day-old rating.** The tempting move is
+   to drop #26 and chase informed determinization now. Rejected: #26
+   answers rollout policy and $c$ at the time budget regardless of how the
+   determinization question resolves, it costs CPU we are not otherwise
+   using, and row #4 needs days to converge anyway. Run them in parallel
+   and let #4 decide #29's shape. We are ~3 weeks ahead of the roadmap;
+   this is exactly the slack that buys the right to wait for evidence.
+4. **Logged the submission after upload and said so.** The rule is log
+   before. It was not followed. Recorded as a deviation in the log's new
+   Process notes rather than back-dated — pre-registration whose timestamps
+   are negotiable is not pre-registration.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs
