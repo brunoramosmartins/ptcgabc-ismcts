@@ -125,12 +125,50 @@ Phase 1 environment work.
   handles the coin flip internally and reports the resulting turn order
   via `obs["current"]["yourIndex"]`.
 
-**Divergences to enumerate during Phase 1** (cross-ref the "differences"
-link on the Kaggle competition page; each item lands here as a bullet
-with the specific rule + simulator behavior + rationale):
+**Confirmed divergences (official Kaggle announcement, 2026-07-16):**
 
-- (Simultaneous KO resolution — expected to be a bookkeeping order in
-  the simulator; confirm.)
+- **The simulator is the spec.** The announcement states plainly that
+  *simulator behavior is treated as the correct behavior* for this
+  competition. Divergence from the official rulebook is therefore not a
+  bug to be worked around or corrected for — it is the game we are
+  playing, and the agent should be optimized against it without apology.
+  This is distinct from the separate prohibition on exploiting
+  *implementation bugs* and *unintended* simulator behavior: documented
+  divergences are intended behavior and are fair game; undocumented
+  glitches are not. The line matters to us because our own heuristic
+  baseline already leans on an engine artifact (EXP-002a: option index 0
+  is systematically stronger, worth 75.5 % vs random) — that is playing
+  the options the engine offers in the order it offers them, which sits
+  on the intended side, but the distinction is worth keeping named.
+- **Unresolvable attacks are not offered at all.** Officially a player may
+  *declare* an attack whose effect cannot resolve; the effect fizzles and
+  the turn ends. The simulator instead removes such attacks from the
+  option list up front. Announced examples: an attack that benches a Basic
+  from the deck when the Bench is full; an attack that draws when the deck
+  is empty; an attack that interacts with the opponent's hand when that
+  hand is empty. Sharpens the "only currently-legal choices" bullet above:
+  `obs["select"]["option"]` is pruned for *resolvability*, not just
+  legality, so the search never branches on those degenerate lines and we
+  inherit that pruning for free.
+- **Mega Zygarde ex — Nullifying Zero.** Officially the attacker chooses
+  the order damage is assigned; the simulator flips coins automatically
+  left to right with no choice offered. Knock Out processing is
+  simultaneous, so the announcement expects no competitive impact. Not in
+  our list; relevant only as an opponent card.
+- **Prize-taking order on a simultaneous Knock Out.** Officially both
+  players choose, then take *simultaneously*. The simulator sequences it:
+  the next player chooses **and takes**, then the opponent chooses and
+  takes, then the next player fills the Active Spot. **Note the clause
+  that matters to us: if both players end up taking all their Prizes, the
+  result is a draw.** So draws are *reachable*, and our repeated
+  observation of zero draws (0 across ~3,600 matches in EXP-002a and
+  EXP-003–007) is an empirical fact about this deck and these matchups,
+  **not** a structural property of the engine — it should never be
+  restated as "the engine cannot draw". `ADR-004`'s reward already carries
+  $r_T = 0$ for exactly this case, so no code change follows.
+
+**Still to enumerate:**
+
 - (Tournament-specific rules like resource decking, coin priority — likely
   absent from `cabt`; confirm.)
 - (Any card whose text refers to a "hand size" or "at random from your
