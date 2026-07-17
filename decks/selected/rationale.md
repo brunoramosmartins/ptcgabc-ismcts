@@ -1,13 +1,21 @@
 # Selected Deck — Rationale
 
-**Status:** selected (2026-07-15, EXP-007). See
-`docs/adr/adr-002-why-this-deck.md` for the full decision record.
+**Status:** selected (2026-07-15, EXP-007), **provisional pending EXP-010
+— read ADR-002's Erratum (2026-07-16) before relying on anything below.**
+See `docs/adr/adr-002-why-this-deck.md` for the full decision record.
 
 `deck.csv` is the list designated **`current-v1`** — a Snover → Mega
 Abomasnow ex + Kyogre control deck (6 basics, 35 {W} energy). It began
-as the Kaggle sample list (Phase-0 placeholder) and was **promoted to a
-deliberate choice** after EXP-007 tested it as the control in a
-four-candidate round-robin.
+as the Kaggle **sample-submission** list (Phase-0 placeholder) and was
+**promoted to a deliberate choice** after EXP-007 tested it as the control
+in a four-candidate round-robin.
+
+**Do not confuse this with the official Mega Abomasnow ex starter deck.**
+They share the Pokémon core and Lillie's Determination, but 11 of 60 cards
+differ: we run Mega Signal ×4 / Maximum Belt ×1 / Cyrano ×2 / Waitress ×4
+and 35 energy, where the starter runs Ultra Ball ×4 / Precious Trolley ×1 /
+Carmine ×4 / Surfing Beach ×3 and 34. The starter list has never played
+against this one; EXP-010 is where that happens.
 
 Why it was kept over three purpose-built candidates:
 

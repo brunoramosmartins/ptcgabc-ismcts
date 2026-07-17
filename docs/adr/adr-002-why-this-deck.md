@@ -1,11 +1,77 @@
 # ADR-002 — Why This Deck
 
-**Status:** accepted (2026-07-15). Supersedes the Phase-0 placeholder note
-in `decks/selected/rationale.md`.
+**Status:** accepted (2026-07-15), **with a material erratum of 2026-07-16
+— see Erratum below. The decision stands provisionally; formal revision is
+gated on EXP-010.** Supersedes the Phase-0 placeholder note in
+`decks/selected/rationale.md`.
 **Decision:** keep the Phase-0 sample list, now promoted to a deliberate
 choice under the name **`current-v1`**, as `decks/selected/deck.csv`.
 **Evidence:** EXP-007 (`experiments/registry.md`); process in
 `notes/phase4-deck-selection.md`.
+
+## Erratum (2026-07-16)
+
+Kaggle's own competition-launch post and the four starter-kit agent
+notebooks falsified two things this ADR asserted. Recorded here rather
+than edited into the text above, because an ADR that silently repairs its
+own reasoning stops being a record of how the decision was actually made.
+
+**1. The deck is misidentified throughout this document.** This ADR calls
+`current-v1` "the Kaggle sample list" and concludes that "the sample deck
+is better engineered than it looks". It is *not* the official **Mega
+Abomasnow ex starter deck**. `decks/selected/deck.csv` came from
+`data/kaggle/sample_submission/deck.csv` — the sample *submission* list.
+The two share only the Pokémon core and one Supporter; **11 of 60 cards
+differ**:
+
+| | `current-v1` (ours) | Official Mega Abomasnow ex starter |
+|---|---|---|
+| Shared | Kyogre ×2, Snover ×4, Mega Abomasnow ex ×4, Lillie's Determination ×4 | same |
+| Energy | Basic {W} ×**35** | Basic {W} ×**34** |
+| Support | Mega Signal ×4, Maximum Belt ×1, Cyrano ×2, Waitress ×4 | Ultra Ball ×4, Precious Trolley ×1, Carmine ×4, Surfing Beach ×3 |
+
+So the praise for the list's engineering was aimed at the wrong artifact.
+The **actual** starter deck — same archetype, a support suite The Pokémon
+Company tuned a rule-based agent around — **has never played a single game
+against ours**. It is the most informative candidate available and it was
+missing from the pool. (Incidental confirmation: EXP-007's "up to N" crash
+came from **Cyrano**, card 1205 — a card in *our* list and not in the
+official one.)
+
+**2. The premise behind the maximin rule is falsified.** The Context below
+argues: *"Unknown opponent pool. The ladder runs diverse decks we cannot
+enumerate in advance."* The competition **publishes four sample decks**
+(Iono, Dragapult ex, Mega Abomasnow ex, Mega Lucario ex), each with a
+ready-made agent notebook, and the starter kit is where most entrants
+begin. The field is not enumerable with certainty, but it is far from
+unknowable — which weakens the case for maximin over optimizing against a
+known field.
+
+**3. Consequently the evidence base is a proxy, not the meta.** Three of
+EXP-007's four candidates (`v1-tuned`, `aggro-fire`, `emboar-evolution`)
+were built by us. The pool shares exactly one deck with the likely real
+field, and that one is ours. The matchup matrix has a hole precisely where
+the meta belongs.
+
+**What survives.** The *decision* may well be correct: the replacement gate
+never fired, `current-v1` dominated all three challengers head-to-head, and
+the cost-axis argument (0.7 % timeout vs 11–24 % for the Fire decks) is
+independent of the pool's composition. The `v1-tuned` lesson — that cutting
+energy 35 → 27 breaks Hammer-lanche's deck-density scaling — also survives,
+and the official list running 34 energy corroborates it. What does *not*
+survive is the claim that this deck was validated against the field.
+
+**Gate.** EXP-010 runs `current-v1` against the four official decks,
+including the real Mega Abomasnow ex list. This ADR is revised or
+superseded on that evidence, not before.
+
+**Pattern worth naming.** This is the third construct-validity gap found in
+one week: H1 was measured under a mirror-deck condition the ladder never
+offers; EXP-009 is pricing a filler determinization the ladder forces on
+us; and now the deck was selected against a pool we invented. Every time we
+*authored* the test condition instead of importing it from the deployment
+environment, the two diverged. That belongs in Threats to Validity as a
+methodological finding, not as three separate footnotes.
 
 ## Context
 
