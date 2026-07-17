@@ -400,6 +400,78 @@ the item that analysis left open.
    Process notes rather than back-dated — pre-registration whose timestamps
    are negotiable is not pre-registration.
 
+### 2026-07-16 — The measured field arrives, and corrects my correction
+
+Read the public leaderboard meta snapshot
+(`myso1987/ptcg-ai-battle-leaderboard-deck-meta-by-score-band`, snapshot
+23:35 UTC, 595 teams, 100 % retrieval and classification coverage this
+run, zero API errors). First deck-field evidence in this project that we
+did not author ourselves.
+
+**What it shows.** Alakazam — a community deck around a *non-ex*
+attacker, not one of the four starters — is first in every band above
+700 and 47 % of the 900–999 band. The starter decks sink with altitude:
+Mega Lucario is 24–25 % of the two lowest bands and fades upward; Iono is
+nearly absent. **Our archetype ("Other / Mega Abomasnow ex") appears only
+in the two lowest bands — 5 % at 500–599, 4 % at 600–699 — and never
+above 700.** Nine teams in the whole sample.
+
+**Key non-trivial decisions.**
+
+1. **My own correction was wrong, and this is the fourth iteration.**
+   Yesterday's erratum killed ADR-002's "the field cannot be enumerated"
+   and I replaced it with "the field ≈ the four starter decks." That was
+   still an *authored* premise. The measured field is ~20 archetypes,
+   mostly custom; in our nearest band the starters we hold cover ~39 %
+   and the other ~60 % (Starmie, Crustle, Alakazam, Marnie) are decks we
+   have never simulated. The pattern is now four for four: H1's mirror,
+   EXP-009's filler, ADR-002's homemade pool, and my starter-kit guess.
+   **Every authored test condition has diverged from deployment.** That is
+   the Threats-to-Validity finding, and the discipline it implies is
+   simple: import the condition, never invent it.
+2. **Usage is not strength, and I will not read it as such.** The table
+   measures where *teams* playing a deck sit, not what the deck is worth,
+   and the author says so. Alakazam's shape is suspicious in a specific
+   way: it peaks at 47 % in 900–999 and *falls* in the bands above. That
+   is the signature of public-notebook forks converging on identical
+   ratings — a Kaggle sociology artifact, not a meta measurement. Deck and
+   pilot are fully confounded: a starter sitting low may reflect its stock
+   rule-based agent. Our Abomasnow never clearing 700 may mean "weak deck"
+   or "only beginners play it"; we would be the first Abomasnow with real
+   search. This dataset cannot separate those.
+3. **Deck risk flagged, deliberately not acted on.** Joining the meta
+   table with the starter agents' `prize_count` gives the first *mechanical*
+   candidate explanation for our archetype's ceiling: a Mega ex concedes
+   **3 prizes** on a Knock Out, and the top meta is a 1-prize Alakazam and
+   Crustle walls. The exchange math is brutal — they need ~2 KOs, we need
+   ~6. Compelling, and still not enough to move: Megas are tanks, EXP-007
+   saw none of these decks, and the evidence is confounded per (2). It
+   goes to the writeup's deck-risk section and raises the priority of
+   testing `current-v1` against a *real* Alakazam list — before we spend
+   four weeks polishing an agent around a deck that may have a structural
+   ceiling.
+4. **Mine the lists; do not transcribe them by eye.** The replay schema
+   puts the 60-card deck in `steps[1][seat]["action"]` — the deck
+   submission is the agent's first action — so a public replay yields the
+   exact list for both seats. Hand-marking cards from a watched match
+   would recover perhaps half of one and guess the rest: an authored
+   proxy wearing a measured costume, which is precisely the failure this
+   entry is about. Scoped as `replay-deck-mining` in `open-ideas.md`,
+   gated on EXP-009 (if filler is not the constraint, the determinization
+   half evaporates) and on a Competition Rules check.
+5. **Nothing here is edge, and that is fine.** The snapshot is public, so
+   everyone contra-metaing the top is reading it too. We are not using it
+   competitively; we are using it for **validity**. It is not gold — it is
+   floor.
+
+**Caveats recorded with the data.** Five bands show exactly 100 teams
+because that is the stratified sampler's cap, so band-internal shares are
+computable (±~5 pp at n = 100) but ladder-wide shares are not. The bands
+start at 500 and we sit at 475/497 — we are literally off the map, and
+500–599 is a proxy for our field, not our field. And it is a snapshot of a
+moving target: our own frozen heuristic drifted 38 points in 11 days, so
+this should be re-pulled near the deadline.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs

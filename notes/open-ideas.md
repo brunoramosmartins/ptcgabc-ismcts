@@ -52,6 +52,83 @@ each status change.)_
 
 ## Ideas
 
+### replay-deck-mining — Recover real opponent decklists from public episode replays
+
+**Motivation.**
+Every deck condition we have ever tested was authored by us, and every
+time the authored condition diverged from deployment (H1's mirror,
+EXP-009's filler, ADR-002's homemade pool). The public leaderboard meta
+snapshot (`myso1987/ptcg-ai-battle-leaderboard-deck-meta-by-score-band`,
+2026-07-16) ends the excuse: in our nearest band (500–599) the top ten
+archetypes cover 88 % of classified teams, and we hold lists for **~39 %**
+of it (Mega Lucario 24 %, Dragapult 10 %, our own mirror 5 %). The other
+~60 % — Mega Starmie 13 %, Crustle Wall 12 %, Alakazam 11 %, Marnie
+Grimmsnarl 5 % — are decks we have never simulated once. Alakazam alone is
+first in *every* band above 700 and 47 % of the 900–999 band.
+
+**Formal statement.**
+A public episode replay carries the submitted decks verbatim: the deck
+submission is the agent's **first action**, so `steps[1][seat]["action"]`
+is the 60-card list (schema confirmed by reading the meta notebook's
+`extract_decks`, with a `visualize`-based fallback for older replays).
+For each target archetype $k$, mine $n_k$ lists from replays of teams the
+published marker rules classify as $k$, and store them under
+`decks/candidates/mined/<archetype>-<band>-<i>.csv`, validated by
+`battle_start` exactly as the starter decks were. Two consumers:
+
+1. **EXP-010's opponent pool** — replace "the four starter decks" (an
+   assumption) with an empirical field weighted by band share, plus an
+   honest statement of what the residual tail leaves uncovered.
+2. **[[informed-determinization]]** — the marker rules *are* a
+   classifier over ~10–20 archetypes. Observing the opponent's public
+   cards in play induces a posterior over archetypes; determinizing from
+   the inferred list replaces `FILLER_CARD = 1072` (Snorlax, adopted from
+   an official sample whose own comment reads "There is no deep meaning").
+   The hypothesis space is enumerable, which is what makes this tractable
+   at all.
+
+**Two things this does NOT license.**
+Piloting is confounded with the deck in the meta table: a starter deck
+sitting low may reflect its stock rule-based agent, not the list. Mining
+a list lets us *strip* that confound by piloting every deck with our own
+agent (EXP-007's design) — it does not let us read deck strength off the
+leaderboard. Second, the meta notebook deliberately publishes aggregates
+only and no decklists; that restraint should carry into our artifacts —
+mined lists are simulation inputs under `vendor/`-style hygiene, and the
+writeup cites archetype *shares*, never another team's list.
+
+**Rules check required before running.** The technique reads Kaggle's
+public replay interface and the well-received meta notebook does exactly
+this, but "does the competition permit mining opponent decks" is a
+question for the Competition Rules, not for our inference. Confirm before
+the first collection run.
+
+**Literature.**
+- Cowling, Powley & Whitehouse 2012, §4: ISMCTS determinizes by sampling
+  $h \sim P(h \mid I)$; the prior's quality is the whole game, and ours is
+  currently a constant.
+- [PTCG Replay Data Miner](https://www.kaggle.com/code/llccqq624/ptcg-replay-data-miner)
+  — credited by the meta notebook as the source of the extraction approach.
+- The meta snapshot itself, for band weights and the marker rules.
+
+**Where in the roadmap.**
+Gated on EXP-009: if filler determinization is *not* what costs us
+(branch c), the determinization consumer evaporates and only the EXP-010
+pool argument survives. Collection is API-bound, not CPU-bound, so it can
+overlap any running experiment.
+
+**Risk to scope.**
+Kaggle API pacing dominates: the meta run needed 1,717 requests at ≥1 s
+spacing with 60 s cooldowns per 100, ~30+ min for 595 teams. Mining a
+handful of lists per archetype is far smaller. HTTP 429 is not retried by
+that codebase's own policy — copy the pacer, don't fight it. Real risk is
+scope creep into a data-engineering project a month before the deadline;
+descope to *one* list per top-5 archetype if it grows.
+
+**Status.**
+idea (2026-07-16), gated on EXP-009's verdict and a Competition Rules
+check.
+
 ### trajectory-corpus — Log full self-play trajectories as future training data
 
 **Motivation.**
