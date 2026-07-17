@@ -530,6 +530,37 @@ assumption that costs nothing. That arc *is* the research question's
 answer taking shape: the value of ISMCTS in PTCG is not search depth, it
 is the quality of $P(h \mid I)$.
 
+### 2026-07-17 — A knowledge-heavy public agent triangulates EXP-009
+
+**Decisions made:**
+
+1. **A public notebook (Mega Lucario ex agent, above us on the public
+   ladder) was analyzed and distilled into `open-ideas.md` as
+   `threat-aware-evaluator` — and deliberately nothing else.** Its
+   architecture answers the hidden-information problem by *not
+   simulating the opponent at all*: a dense hand-crafted policy, a
+   1-ply verification search that stops at the agent's own turn
+   boundary, and a static evaluator carrying an aggregate threat model
+   ("assume +1 energy, compute max damage, penalize lethal exposure
+   weighted by prizes conceded"). Read next to EXP-009 (−27.4 pp from
+   simulating the opponent *badly*), it is independent evidence for the
+   same conclusion from the opposite direction. Its differential is
+   game knowledge — archetype detection over revealed board IDs,
+   prize-trade management including the 3-prize Mega concession,
+   deck-out defense — not computation: it spends ~1.5 s/decision
+   against our adaptive ~6.75 s.
+2. **No project change follows from it now.** EXP-010 is mid-run and
+   its protocol does not move; the threat-term concept is queued for
+   Issue #23 (evaluator design) where H4's pre-registered ablation can
+   price it like any other feature. Concepts transfer; constants do
+   not — nothing was copied, the same restraint applied to the meta
+   notebook and mined decklists.
+3. **The attribution caveat is recorded with the observation:** the
+   public score attaches to the team, drifts on a non-stationary ladder,
+   and may reflect submissions other than the shared notebook. It is
+   directional evidence that knowledge-heavy shallow search is
+   competitive here — not a measured comparison against us.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs

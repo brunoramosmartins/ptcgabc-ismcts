@@ -192,6 +192,102 @@ mitigation is this entry's explicit gate.
 scoped (2026-07-16): collection implemented, first use gated on EXP-010's
 registration; training gated on Phase 7.
 
+### threat-aware-evaluator — Model the opponent in the evaluator, not in the simulation
+
+**Motivation.**
+A public notebook analyzed 2026-07-17 (a Mega Lucario ex agent — the #1
+archetype of our score band) sits above us on the public ladder while
+doing **no opponent determinization at all**. Its architecture is a
+hand-crafted move-scoring policy, a 1-ply UCB1 verification search that
+rolls out only to the end of the agent's *own* turn, and a static
+evaluator that models the opponent as an aggregate threat: assume each
+opposing Pokémon attaches one more energy, compute the maximum damage it
+could then deal, and penalize states where our active dies to it
+(weighted by the prizes we would concede — it explicitly manages the
+3-prize Mega ex trade, including counter-play keyed to *our* archetype's
+visible board IDs). This is a third answer to the hidden-information
+problem, and it triangulates EXP-009 from the other side:
+
+| condition | opponent model | evidence |
+|---|---|---|
+| filler (ours, deployed) | impossible-and-inert, simulated deep | −27.4 pp (EXP-009) |
+| self-deck (ours, EXP-010) | wrong-but-coherent, simulated deep | pending |
+| threat-aware (theirs) | none simulated; worst-case aggregate in $V(s)$ | above us publicly |
+
+The differential of that agent is **game knowledge, not computation**:
+archetype detection by set membership over revealed card IDs, prize-trade
+math, deck-out defense, matchup-specific constants. It spends ~1.5 s per
+decision against our adaptive ~6.75 s and wins anyway.
+
+**Attribution caveat (recorded with the observation).** The public score
+attaches to the *team*, updates continuously on a non-stationary ladder
+(our own frozen heuristic drifted 38 points in 11 days), and cannot be
+pinned to this exact notebook version — the author may have stronger
+private submissions. Directional evidence only; nothing here is a
+measured comparison.
+
+**Formal statement.**
+Add an opponent-threat term to the Phase-4 evaluator (Issue #23) instead
+of (or alongside) simulating the opponent's hidden hand. For a state $s$
+with our active $a$ and opposing board $B$:
+
+$$
+T(s) \;=\; \max_{p \in B} \; D\!\bigl(p,\; e_p + 1\bigr),
+$$
+
+where $D(p, e)$ is the maximum damage Pokémon $p$ deals with $e$
+energies (computable from public card data — no hidden information
+required), and the evaluator takes a penalty $-\lambda \cdot
+\text{prizes}(a) \cdot \mathbb{1}\{T(s) \ge \text{hp}(a)\}$ plus a
+proportional term below lethal. Two consumers, in order of fit:
+
+1. **A feature in the evaluator/MoveScorer** — which makes it one more
+   column in H4's pre-registered per-feature ablation (Phase 5), so its
+   value gets measured, not assumed.
+2. **Truncated-rollout evaluation** — roll out $d$ plies then apply
+   $V(s)$ instead of playing to terminal, sidestepping the opponent-turn
+   simulation that EXP-009 showed is worthless under a bad hidden-state
+   model. This is a deeper change to the search and is post-EXP-010
+   material at the earliest.
+
+The concept transfers; the constants must not — every weight we adopt
+gets derived from our own card data and ablated, not transcribed from a
+public notebook.
+
+**Literature.**
+- Browne et al. 2012, §6.1 (evaluation-enhanced MCTS): truncating
+  rollouts into a static evaluator is standard where full playouts are
+  noisy or expensive — Lorentz's Amazons results are the canonical win.
+- Sheppard 2002 (*World-championship-caliber Scrabble*): shallow
+  simulation plus a knowledge-heavy static evaluation beating deeper but
+  less-informed search — the closest architectural ancestor of the
+  observed agent.
+- Sturtevant & Bowling 2006: opponent modeling folded into search
+  values rather than explicit hidden-state sampling.
+
+**Where in the roadmap.**
+Issue #23 (Phase 4, evaluator design) is the natural intake for the
+threat term as a *feature*; H4 (Phase 5) then ablates it with the same
+Bonferroni-corrected paired machinery as every other feature — no
+amendment to the pre-registered hypotheses needed. The truncated-rollout
+consumer waits on EXP-010's verdict: if self-deck recovers most of the
+gap, deep simulation stays; if not, evaluation-based truncation becomes
+the live alternative. Also a candidate Phase-5 diagnostic arm
+("1-ply + evaluator" control) to place deep search against a
+shallow-knowledge baseline — same role the PIMC arm played for the tree.
+
+**Risk to scope.**
+The observed agent embodies hundreds of hand-tuned constants; chasing
+that is a tuning rabbit hole with no experimental story and directly
+conflicts with our differential (registered, measured comparisons).
+Descope rule: the threat term enters as **one feature with one weight**,
+measured by H4, or it does not enter at all.
+
+**Status.**
+idea (2026-07-17), distilled from a public-notebook analysis (chat
+record); no code or constants copied, per the same restraint rule as
+[[replay-deck-mining]].
+
 ### informed-determinization — Non-uniform $P(h \mid I)$ using public information
 
 **Motivation.**
