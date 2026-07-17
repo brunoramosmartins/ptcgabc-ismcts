@@ -197,6 +197,7 @@ def decide(
     rollout_policy=None,
     max_seconds: float | None = None,
     min_iterations: int = 1,
+    opponent_list_is_assumed: bool = False,
 ) -> list[int]:
     """Run SO-ISMCTS for one decision; return option indices to play.
 
@@ -224,6 +225,9 @@ def decide(
         min_iterations: Floor on completed iterations before the
             wall-clock cap can trigger, so the root always has visited
             children and ``best_action_by_visits`` returns a real move.
+        opponent_list_is_assumed: Passed through to the determinizer —
+            treat ``opponent_deck_list`` as a guess with relaxed
+            opponent-side accounting (the `ismcts-selfdeck` condition).
 
     Returns:
         Option indices for the real observation's option array.
@@ -245,7 +249,8 @@ def decide(
         ):
             break
         det = sample_determinization(
-            obs, my_deck_list, opponent_deck_list, rng, filler_card
+            obs, my_deck_list, opponent_deck_list, rng, filler_card,
+            opponent_list_is_assumed=opponent_list_is_assumed,
         )
         _run_iteration(root, obs, det, root_index, c, rng,
                        rollout=rollout_policy)

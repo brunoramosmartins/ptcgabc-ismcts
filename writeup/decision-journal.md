@@ -472,6 +472,64 @@ start at 500 and we sit at 475/497 — we are literally off the map, and
 moving target: our own frozen heuristic drifted 38 points in 11 days, so
 this should be re-pulled near the deadline.
 
+### 2026-07-17 — EXP-009 lands early; EXP-010 re-scoped to the determinization
+
+**Decisions made:**
+
+1. **The EXP-009 interim was read at n = 113, and this is recorded.** The
+   pre-registered verdict remains N = 500, but with the run resumable and
+   the effect predicted large, a peek costs nothing *provided the decision
+   rule does not move afterward* — so the peek and its non-effect on the
+   protocol are logged here: filler 0.47 vs informed 0.81 on the shared
+   seeds, paired Δ ≈ −35 pp, McNemar p ≈ 1.5e-07 with 57 discordant pairs.
+   This is branch (a) of the registration, and not marginally: knowing the
+   opponent's list was carrying essentially the entire H1 margin. The
+   ladder was right and the benchmark was measuring a condition the ladder
+   never offers — construct-validity gap number five, and the largest.
+2. **EXP-010 is now the determinization comparison; the deck
+   re-evaluation is renumbered EXP-011.** Two reasons, one pre-committed
+   and one methodological. Pre-committed: EXP-009's branch (a) consequence
+   ("informed determinization is promoted to a Phase-4 candidate") was
+   registered before the run. Methodological: EXP-007 ranked decks using
+   the agent as the measuring instrument, under informed-mirror
+   conditions; the determinization lever (~30 pp) is about twice the
+   largest deck effect EXP-007 measured (~16 pp), so re-ranking decks
+   before fixing the instrument would measure the delusion, not the
+   decks. ADR-002's erratum gate and `rationale.md` now point at EXP-011.
+3. **The candidate fix is the cheapest deployable one: assume the
+   opponent plays our own list.** The filler board is not merely
+   imprecise, it is *impossible* — 60× Snorlax has no energy, no
+   trainers, no attacker, so the search optimizes against an opponent
+   that cannot act, and the real one punishes the plans that result. A
+   self-deck assumption is wrong against the real field but coherent: the
+   simulated opponent fights back. Wrong-and-alive vs impossible-and-dead
+   is an empirical question, and it ships without any inference
+   machinery. Archetype inference (replay mining) stays a Phase-5
+   candidate, priced by EXP-010's informed-minus-selfdeck gap.
+4. **The determinizer got an `opponent_list_is_assumed` mode instead of a
+   silent relaxation.** Strict accounting raises on the first revealed
+   opponent card that is not in the assumed list — which is every
+   non-mirror game — so assumed mode clamps the subtraction and tolerates
+   an oversized pool, *on the opponent's side only*; our side stays
+   exact, and an assumed pool that cannot cover the board still fails
+   loud. The strict path is byte-identical, so EXP-003–009 semantics are
+   untouched (`tests/test_determinize.py` pins both properties).
+5. **The informed arm rides along as a ceiling, never as a candidate.**
+   `ismcts` with the true list cannot ship (the ladder hides the list);
+   it is in EXP-010 to price what perfect inference would buy. The gap
+   informed − selfdeck is the budget line for Phase-5 inference work: if
+   it is small, replay mining is not worth its scope risk.
+6. **Trajectory recording turns on with EXP-010, per the gate.** First
+   corpus run; acceptable because EXP-010 estimates no timing quantity.
+   Provenance is the registry entry plus `scripts/run_exp010.sh`.
+
+**Why it matters for the writeup:** the H1 story now has its honest arc —
+supported in the mirror-informed condition, erased under deployment
+determinization, and (pending EXP-010) partially recoverable by an
+assumption that costs nothing. That arc *is* the research question's
+answer taking shape: the value of ISMCTS in PTCG is not search depth, it
+is the quality of $P(h \mid I)$.
+
 ## Failed Attempts
 
 - **"Up to N" selects crashed EXP-007 (seed 37, current-v1 vs

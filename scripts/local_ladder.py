@@ -111,6 +111,29 @@ def _ismcts_filler_builder(seed: int, my_deck: list[int],
     )
 
 
+def _ismcts_selfdeck_builder(seed: int, my_deck: list[int],
+                             opp_deck: list[int], iterations: int) -> Agent:
+    """ISMCTS assuming the opponent plays *our own* deck (EXP-010 arm).
+
+    Like `ismcts-filler`, the real opponent list is discarded — this is
+    a deployable condition, no hidden knowledge. Unlike the filler, the
+    hidden zones are modeled with a legal, coherent 60-card list (ours),
+    so the simulated opponent has energy, trainers and attackers, and
+    the search plans against a board that fights back. Wrong against a
+    real field, but wrong-and-alive; EXP-009 showed impossible-and-dead
+    costs ~30 pp. `opponent_list_is_assumed=True` relaxes opponent-side
+    accounting so revealed foreign cards don't blow up the sampler.
+    """
+    del opp_deck  # deployable condition: we never see the real list
+    return ISMCTSAgent(
+        my_deck_list=my_deck,
+        opponent_deck_list=list(my_deck),
+        opponent_list_is_assumed=True,
+        iterations=iterations,
+        rng=random.Random(seed),
+    )
+
+
 def _pimc_builder(seed: int, my_deck: list[int], opp_deck: list[int],
                   iterations: int) -> Agent:
     return PIMCAgent(
@@ -148,6 +171,7 @@ AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "heuristic": _heuristic_builder,
     "ismcts": _ismcts_builder,
     "ismcts-filler": _ismcts_filler_builder,   # EXP-009: deployment condition
+    "ismcts-selfdeck": _ismcts_selfdeck_builder,  # EXP-010: assumed own list
     "ismcts-guided": _ismcts_guided_builder,   # H2 treatment arm
     "pimc": _pimc_builder,
     "oracle": _oracle_builder,   # LOCAL DIAGNOSTIC ONLY — never submit

@@ -30,6 +30,7 @@ def test_agent_registry_has_all_arms() -> None:
     assert "heuristic" in AGENT_REGISTRY
     assert "ismcts" in AGENT_REGISTRY
     assert "ismcts-filler" in AGENT_REGISTRY
+    assert "ismcts-selfdeck" in AGENT_REGISTRY
 
 
 def test_ismcts_filler_discards_the_opponent_list() -> None:
@@ -54,6 +55,31 @@ def test_ismcts_filler_differs_from_ismcts_only_in_determinization() -> None:
     assert filler.rollout_policy is informed.rollout_policy  # both random
     assert filler.adaptive_budget == informed.adaptive_budget
     assert filler.max_seconds_per_move == informed.max_seconds_per_move
+
+
+def test_ismcts_selfdeck_discards_the_real_opponent_list() -> None:
+    # Like the filler arm, self-deck is a *deployable* condition: it
+    # must not peek at the real list. A leak here would make EXP-010's
+    # self-deck arm an informed arm in disguise and overstate what we
+    # can actually ship.
+    agent = AGENT_REGISTRY["ismcts-selfdeck"](1, DECK, DECK_B, 10)
+    assert agent.opponent_deck_list == DECK
+    assert agent.opponent_deck_list is not agent.my_deck_list  # own copy
+    assert agent.opponent_list_is_assumed is True
+    assert agent.filler_card is None
+
+
+def test_ismcts_selfdeck_differs_from_filler_only_in_opponent_model() -> None:
+    filler = AGENT_REGISTRY["ismcts-filler"](1, DECK, DECK_B, 10)
+    selfdeck = AGENT_REGISTRY["ismcts-selfdeck"](1, DECK, DECK_B, 10)
+    # EXP-010 compares these two arms; everything except the imagined
+    # opponent must be held fixed.
+    assert selfdeck.my_deck_list == filler.my_deck_list
+    assert selfdeck.iterations == filler.iterations
+    assert selfdeck.rollout_policy is filler.rollout_policy
+    assert selfdeck.adaptive_budget == filler.adaptive_budget
+    assert selfdeck.max_seconds_per_move == filler.max_seconds_per_move
+    assert filler.opponent_list_is_assumed is False
 
 
 class _ScriptedAgent:

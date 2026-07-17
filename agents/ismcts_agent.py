@@ -63,9 +63,11 @@ class ISMCTSAgent(Agent):
         overage_reserve: float = 60.0,
         budget_moves_ahead: int = 40,
         min_iterations: int = 1,
+        opponent_list_is_assumed: bool = False,
     ) -> None:
         self.my_deck_list = my_deck_list
         self.opponent_deck_list = opponent_deck_list
+        self.opponent_list_is_assumed = opponent_list_is_assumed
         self.iterations = iterations
         self.c = c
         self.rng = rng or random.Random()
@@ -108,6 +110,7 @@ class ISMCTSAgent(Agent):
                 rollout_policy=self.rollout_policy,
                 max_seconds=self._budget_seconds(obs),
                 min_iterations=self.min_iterations,
+                opponent_list_is_assumed=self.opponent_list_is_assumed,
             )
         except (SearchApiError, DeterminizationError) as exc:
             turn = (obs.get("current") or {}).get("turn")

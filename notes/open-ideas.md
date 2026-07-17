@@ -76,9 +76,10 @@ published marker rules classify as $k$, and store them under
 `decks/candidates/mined/<archetype>-<band>-<i>.csv`, validated by
 `battle_start` exactly as the starter decks were. Two consumers:
 
-1. **EXP-010's opponent pool** — replace "the four starter decks" (an
-   assumption) with an empirical field weighted by band share, plus an
-   honest statement of what the residual tail leaves uncovered.
+1. **EXP-011's opponent pool** (deck re-evaluation) — replace "the four
+   starter decks" (an assumption) with an empirical field weighted by
+   band share, plus an honest statement of what the residual tail leaves
+   uncovered.
 2. **[[informed-determinization]]** — the marker rules *are* a
    classifier over ~10–20 archetypes. Observing the opponent's public
    cards in play induces a posterior over archetypes; determinizing from
@@ -113,7 +114,7 @@ the first collection run.
 
 **Where in the roadmap.**
 Gated on EXP-009: if filler determinization is *not* what costs us
-(branch c), the determinization consumer evaporates and only the EXP-010
+(branch c), the determinization consumer evaporates and only the EXP-011
 pool argument survives. Collection is API-bound, not CPU-bound, so it can
 overlap any running experiment.
 

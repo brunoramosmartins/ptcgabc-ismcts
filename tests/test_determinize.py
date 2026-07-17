@@ -300,3 +300,101 @@ def test_unknown_opponent_without_filler_raises() -> None:
     )
     with pytest.raises(DeterminizationError, match="filler_card"):
         sample_determinization(obs, [10, 3, 3], None, random.Random(1))
+
+
+# --- assumed opponent list (EXP-010, `ismcts-selfdeck` condition) --------
+
+
+def test_assumed_list_tolerates_foreign_visible_cards() -> None:
+    # The opponent's active (50) and discard (7) are NOT in the assumed
+    # list. Strict mode raises on the first revealed foreign card —
+    # which is every non-mirror game on the ladder; assumed mode must
+    # sample from the guess instead.
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[7], opp_deck_count=2, opp_prize_count=1, opp_hand_count=1,
+    )
+    assumed = [30, 31, 32, 33]             # need 4 hidden, none visible
+    det = sample_determinization(
+        obs, [10, 3, 3], assumed, random.Random(1),
+        opponent_list_is_assumed=True,
+    )
+    hidden = det["enemy_deck"] + det["enemy_prize"] + det["enemy_hand"]
+    assert sorted(hidden) == [30, 31, 32, 33]
+
+
+def test_assumed_list_subtracts_overlapping_visible_copies() -> None:
+    # Where the guess overlaps reality, the constraint still binds: the
+    # single copy of 7 in the assumed list is in the discard, so no
+    # sampled world may hold a second one.
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[7], opp_deck_count=2, opp_prize_count=1, opp_hand_count=0,
+    )
+    assumed = [7, 30, 31, 32]              # 7 visible; need 3 hidden
+    det = sample_determinization(
+        obs, [10, 3, 3], assumed, random.Random(1),
+        opponent_list_is_assumed=True,
+    )
+    hidden = det["enemy_deck"] + det["enemy_prize"] + det["enemy_hand"]
+    assert sorted(hidden) == [30, 31, 32]
+
+
+def test_assumed_list_tolerates_pool_excess_beyond_slack() -> None:
+    # Foreign visible cards subtract nothing, so the assumed pool is
+    # oversized in every real game — far beyond POOL_SLACK. The strict
+    # excess check must not apply on the assumed side.
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=0,
+    )
+    assumed = [30 + i for i in range(10)]  # pool 10, need 2, excess 8
+    det = sample_determinization(
+        obs, [10, 3, 3], assumed, random.Random(1),
+        opponent_list_is_assumed=True,
+    )
+    assert len(det["enemy_deck"]) == 1
+    assert len(det["enemy_prize"]) == 1
+    assert set(det["enemy_deck"] + det["enemy_prize"]) <= set(assumed)
+
+
+def test_assumed_list_hidden_active_is_still_a_basic() -> None:
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[7], opp_deck_count=1, opp_prize_count=1, opp_hand_count=1,
+        opp_active_hidden=True,
+    )
+    for seed in range(5):
+        det = sample_determinization(
+            obs, [10, 3, 3], [40, 41, 42, 43], random.Random(seed),
+            basic_ids={43}, opponent_list_is_assumed=True,
+        )
+        assert det["enemy_active"] == [43]
+
+
+def test_assumed_pool_shortage_raises() -> None:
+    # Oversize is expected; undershoot is not — a guess that cannot even
+    # populate the board must fail loud, not sample a partial world.
+    obs = _obs(
+        my_hand=[], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=3, opp_prize_count=2, opp_hand_count=2,
+    )
+    with pytest.raises(DeterminizationError, match="assumed"):
+        sample_determinization(
+            obs, [10, 3, 3], [30, 31], random.Random(1),
+            opponent_list_is_assumed=True,
+        )
+
+
+def test_assumed_mode_keeps_our_side_strict() -> None:
+    # The relaxation is opponent-side only: our own accounting is
+    # ground truth and a mismatch there is still a bug, not a guess.
+    obs = _obs(
+        my_hand=[99], my_discard=[], my_deck_count=1, my_prize_count=1,
+        opp_discard=[], opp_deck_count=1, opp_prize_count=1, opp_hand_count=0,
+    )
+    with pytest.raises(DeterminizationError, match="not in the deck list"):
+        sample_determinization(
+            obs, [10, 3, 3], [30, 31, 32], random.Random(1),
+            opponent_list_is_assumed=True,
+        )

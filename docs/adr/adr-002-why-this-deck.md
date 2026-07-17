@@ -2,8 +2,10 @@
 
 **Status:** accepted (2026-07-15), **with a material erratum of 2026-07-16
 — see Erratum below. The decision stands provisionally; formal revision is
-gated on EXP-010.** Supersedes the Phase-0 placeholder note in
-`decks/selected/rationale.md`.
+gated on EXP-011 (deck re-evaluation, originally slated as EXP-010 —
+renumbered 2026-07-17 when EXP-010 was claimed by the determinization
+comparison EXP-009 branch (a) pre-committed).** Supersedes the Phase-0
+placeholder note in `decks/selected/rationale.md`.
 **Decision:** keep the Phase-0 sample list, now promoted to a deliberate
 choice under the name **`current-v1`**, as `decks/selected/deck.csv`.
 **Evidence:** EXP-007 (`experiments/registry.md`); process in
@@ -61,9 +63,12 @@ energy 35 → 27 breaks Hammer-lanche's deck-density scaling — also survives,
 and the official list running 34 energy corroborates it. What does *not*
 survive is the claim that this deck was validated against the field.
 
-**Gate.** EXP-010 runs `current-v1` against the four official decks,
+**Gate.** EXP-011 runs `current-v1` against the four official decks,
 including the real Mega Abomasnow ex list. This ADR is revised or
-superseded on that evidence, not before.
+superseded on that evidence, not before. It runs *after* EXP-010 settles
+the determinization condition, because a deck ranking is only as valid as
+the agent that measures it — EXP-009 showed the determinization moves the
+agent by ~30 pp, roughly double the largest deck effect EXP-007 saw.
 
 **Pattern worth naming.** This is the third construct-validity gap found in
 one week: H1 was measured under a mirror-deck condition the ladder never
