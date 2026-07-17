@@ -52,6 +52,68 @@ each status change.)_
 
 ## Ideas
 
+### trajectory-corpus — Log full self-play trajectories as future training data
+
+**Motivation.**
+ADR-003 rejected a learned evaluator on four grounds, one of which — "no
+labelled training data exists" — has been false since 2026-07-09: every
+experiment since EXP-003 is instrumented self-play whose outcome we know,
+and ~3,600 matches (~50–60 h of CPU) were reduced to 788 KB of win/loss
+rows because nothing recorded the decisions. The scoreboard was the right
+thing to keep for EXP-003–009 (every hypothesis was about win rate), but
+we now have questions the scoreboard cannot answer, and every future
+CPU-hour that runs unlogged is unrecoverable. The marginal cost of
+recording is near zero when the games are being played anyway.
+
+**Formal statement.**
+`scripts/local_ladder.py --log-trajectories PATH.jsonl.gz` (implemented
+2026-07-16) wraps each seat's agent so every real decision appends
+$(o_t, a_t)$, and the match row appends the terminal reward $r_T$ — one
+gzip member per match, so resume composes with `--append`. Each decision
+becomes one supervised sample $(o_t, a_t, r_T)$: enough for a value head
+$\hat V(o)$ trained on outcome regression (the ADR-003 stretch design)
+and for behavioral cloning of the search's move choices. Recording is
+opt-in and must stay OFF for timing-sensitive runs (it serializes a
+deep-copied obs per decision, and EXP-008-style measurements would absorb
+that cost into $c(\text{it})$).
+
+**Honest volume math (author's own caveat, 2026-07-16).** At $M \approx
+23$ decisions/agent/game, EXP-010-scale runs (~500 games) yield ~23k
+decisions per seat — two to three orders of magnitude below AlphaZero-style
+regimes. A corpus that *matters* needs either many more games (cheap
+low-iteration self-play generates data fastest) or a deliberately modest
+target: a small value head to replace random rollout evaluation does not
+need millions of samples to beat "nothing". Map the corpus size honestly
+before promising a Phase-7 result on it.
+
+**Literature.**
+- Silver et al. 2016 (AlphaGo), §Methods: value network trained on
+  self-play outcome regression — the shape of the label we are storing.
+- Anthony, Tian & Barber 2017 (ExIt): expert iteration — the search is
+  the expert, the net clones it; exactly the $(o_t, a_t)$ half.
+- The competition's own RL sample (Kaggle starter kit): transformer over
+  sparse obs encodings reaches 76 % vs random after 5 self-play epochs —
+  a calibration point, since our zero-training heuristic scores 75.5 %.
+
+**Where in the roadmap.**
+Collection starts with EXP-010 (its registration must name
+`--log-trajectories` in the configuration, both so the corpus provenance
+is recorded and so the timing caveat is visible). Training is **Phase 7
+stretch only** (roadmap: "Optional (Phase 7 only): PyTorch"), after the
+Strategy deadline — ADR-003's other three grounds (deadline, no GPU on
+the worker, H4 confounding) still stand and are not up for relitigation
+here.
+
+**Risk to scope.**
+Near zero at collection time (a flag on runs that happen anyway; results/
+is gitignored, and ~500 games ≈ 0.5–1 GB uncompressed shrinks ~10× under
+gzip). The real risk is the temptation to *train* before Phase 7 — the
+mitigation is this entry's explicit gate.
+
+**Status.**
+scoped (2026-07-16): collection implemented, first use gated on EXP-010's
+registration; training gated on Phase 7.
+
 ### informed-determinization — Non-uniform $P(h \mid I)$ using public information
 
 **Motivation.**

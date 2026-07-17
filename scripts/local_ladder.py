@@ -31,6 +31,8 @@ run without the SDK installed.
 from __future__ import annotations
 
 import argparse
+import copy
+import gzip
 import json
 import pathlib
 import random
@@ -157,13 +159,49 @@ def _load_deck(deck_path: pathlib.Path) -> list[int]:
     return [int(lines[i]) for i in range(60)]
 
 
-def _wrap_for_cabt(agent: Agent, deck: list[int]) -> Callable[[dict], list[int]]:
-    """Bind an Agent to the `cabt`-facing `agent(obs) -> list[int]` contract."""
+class TrajectoryRecorder:
+    """Per-seat log of (observation, chosen action) for every real decision.
+
+    Feeds the self-play training corpus (see `notes/open-ideas.md`,
+    *trajectory-corpus*): with the terminal reward appended by
+    `run_match`, each decision becomes one (obs, action, outcome) sample —
+    the labelled data whose absence ADR-003 cited. Observations are
+    deep-copied at record time because the engine may mutate the dict it
+    hands the agent.
+
+    Costs real serialization time per decision, so it must stay OFF for
+    any experiment where wall-clock is part of the measurement (EXP-008
+    style timing runs).
+    """
+
+    __slots__ = ("decisions",)
+
+    def __init__(self) -> None:
+        self.decisions: list[dict] = []
+
+    def record(self, obs_dict: dict, action: list[int]) -> None:
+        self.decisions.append(
+            {"obs": copy.deepcopy(obs_dict), "action": list(action)}
+        )
+
+
+def _wrap_for_cabt(
+    agent: Agent,
+    deck: list[int],
+    recorder: TrajectoryRecorder | None = None,
+) -> Callable[[dict], list[int]]:
+    """Bind an Agent to the `cabt`-facing `agent(obs) -> list[int]` contract.
+
+    The deck-submission step is never recorded — it is not a decision.
+    """
 
     def _fn(obs_dict: dict) -> list[int]:
         if obs_dict["select"] is None:
             return deck
-        return agent.choose(obs_dict)
+        choice = agent.choose(obs_dict)
+        if recorder is not None:
+            recorder.record(obs_dict, choice)
+        return choice
 
     return _fn
 
@@ -175,8 +213,16 @@ def run_match(
     deck_b: list[int],
     seed: int,
     iterations: int,
+    record_trajectories: bool = False,
 ) -> dict:
-    """Play one match; returns per-match row including fallback details."""
+    """Play one match; returns per-match row including fallback details.
+
+    With ``record_trajectories=True`` the row carries a ``_traj`` key
+    (full per-decision observations and actions for both seats). The
+    caller writes it to the trajectory sink and strips it before the
+    row reaches the summary JSONL — the two files serve different
+    consumers and must not be mixed.
+    """
     import time
 
     from kaggle_environments import make
@@ -184,9 +230,14 @@ def run_match(
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
     agent_a = builder_a(seed, deck_a, deck_b, iterations)
     agent_b = builder_b(seed, deck_b, deck_a, iterations)
+    rec_a = TrajectoryRecorder() if record_trajectories else None
+    rec_b = TrajectoryRecorder() if record_trajectories else None
 
     t0 = time.perf_counter()
-    env.run([_wrap_for_cabt(agent_a, deck_a), _wrap_for_cabt(agent_b, deck_b)])
+    env.run([
+        _wrap_for_cabt(agent_a, deck_a, rec_a),
+        _wrap_for_cabt(agent_b, deck_b, rec_b),
+    ])
     seconds = time.perf_counter() - t0
 
     reward_a = env.state[0]["reward"]
@@ -220,6 +271,11 @@ def run_match(
         row["fallback_events_a"] = events_a
     if events_b:
         row["fallback_events_b"] = events_b
+    if record_trajectories:
+        row["_traj"] = {
+            "decisions_a": rec_a.decisions,
+            "decisions_b": rec_b.decisions,
+        }
     return row
 
 
@@ -289,6 +345,17 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Append to --out instead of truncating (resume support).",
     )
+    p.add_argument(
+        "--log-trajectories",
+        type=pathlib.Path,
+        default=None,
+        help="Gzipped JSONL sink for full per-decision trajectories "
+             "(one line per match: every obs + chosen action for both "
+             "seats + final rewards). Training-data collection for the "
+             "learned-evaluator idea (open-ideas: trajectory-corpus). "
+             "Adds serialization cost per decision — leave OFF for any "
+             "timing-sensitive experiment. Honors --append.",
+    )
     return p.parse_args(argv)
 
 
@@ -301,16 +368,40 @@ def main(argv: list[str] | None = None) -> int:
 
     rows: list[dict] = []
     out_file = None
+    traj_file = None
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
         out_file = args.out.open("a" if args.append else "w")
+    if args.log_trajectories is not None:
+        args.log_trajectories.parent.mkdir(parents=True, exist_ok=True)
+        # Append mode writes one gzip member per match; concatenated
+        # members are a valid gzip stream, so resume works like --out.
+        traj_file = gzip.open(
+            args.log_trajectories, "ab" if args.append else "wb"
+        )
     try:
         for offset in range(args.matches):
             seed = args.seed_start + offset
             row = run_match(builder_a, builder_b, deck_a, deck_b, seed,
-                            args.iterations)
+                            args.iterations,
+                            record_trajectories=traj_file is not None)
             row["agent_a"] = args.agent_a
             row["agent_b"] = args.agent_b
+            traj = row.pop("_traj", None)
+            if traj_file is not None and traj is not None:
+                traj_line = {
+                    "seed": seed,
+                    "agent_a": args.agent_a,
+                    "agent_b": args.agent_b,
+                    "deck_a": deck_a,
+                    "deck_b": deck_b,
+                    "iterations": args.iterations,
+                    "reward_a": row["reward_a"],
+                    "reward_b": row["reward_b"],
+                    **traj,
+                }
+                traj_file.write((json.dumps(traj_line) + "\n").encode())
+                traj_file.flush()
             rows.append(row)
             if out_file is not None:
                 out_file.write(json.dumps(row) + "\n")
@@ -325,6 +416,8 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if out_file is not None:
             out_file.close()
+        if traj_file is not None:
+            traj_file.close()
 
     summary = summarize(rows)
     print(json.dumps(

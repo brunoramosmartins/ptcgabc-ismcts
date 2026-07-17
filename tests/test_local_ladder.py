@@ -13,6 +13,7 @@ import pytest
 
 from scripts.local_ladder import (
     AGENT_REGISTRY,
+    TrajectoryRecorder,
     _load_deck,
     _sign,
     _wrap_for_cabt,
@@ -53,6 +54,51 @@ def test_ismcts_filler_differs_from_ismcts_only_in_determinization() -> None:
     assert filler.rollout_policy is informed.rollout_policy  # both random
     assert filler.adaptive_budget == informed.adaptive_budget
     assert filler.max_seconds_per_move == informed.max_seconds_per_move
+
+
+class _ScriptedAgent:
+    """Returns a fixed action; lets the wrapper tests stay engine-free."""
+
+    def __init__(self, action: list[int]) -> None:
+        self.action = action
+
+    def choose(self, obs: dict) -> list[int]:
+        return self.action
+
+
+def test_wrapper_records_real_decisions_only() -> None:
+    rec = TrajectoryRecorder()
+    fn = _wrap_for_cabt(_ScriptedAgent([2, 0]), DECK, rec)
+    assert fn({"select": None}) == DECK          # deck step: not a decision
+    assert rec.decisions == []
+    obs = {"select": {"option": [{}, {}, {}], "maxCount": 2}}
+    assert fn(obs) == [2, 0]
+    assert len(rec.decisions) == 1
+    assert rec.decisions[0]["action"] == [2, 0]
+
+
+def test_recorder_deep_copies_the_observation() -> None:
+    # The engine may mutate the obs dict it hands the agent between
+    # steps; a shallow reference would silently rewrite history and the
+    # training corpus would be states that never co-occurred.
+    rec = TrajectoryRecorder()
+    obs = {"select": {"option": [{}]}, "current": {"turn": 3}}
+    rec.record(obs, [0])
+    obs["current"]["turn"] = 99
+    assert rec.decisions[0]["obs"]["current"]["turn"] == 3
+
+
+def test_wrapper_without_recorder_is_unchanged() -> None:
+    fn = _wrap_for_cabt(_ScriptedAgent([1]), DECK)
+    assert fn({"select": {"option": [{}, {}], "maxCount": 1}}) == [1]
+
+
+def test_official_candidate_decks_have_60_cards() -> None:
+    base = pathlib.Path(__file__).resolve().parent.parent / "decks" / "candidates"
+    for name in ("iono", "dragapult-ex", "mega-abomasnow-ex-official",
+                 "mega-lucario-ex"):
+        deck = _load_deck(base / f"{name}.csv")
+        assert len(deck) == 60, name
 
 
 def test_filler_card_is_pinned_to_the_submission_shim() -> None:
