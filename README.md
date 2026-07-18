@@ -16,28 +16,64 @@ games?* — tested via four pre-registered hypotheses (H1–H4).
 |---|---|---|---|
 | 0 — Setup & Reconnaissance | SDK, scaffold, random agent submitted | ✅ | `v0.1-setup` |
 | 1 — Environment & Baselines | MDP formalization, benchmark protocol, heuristic baseline | ✅ | `v0.2-baselines` |
-| 2 — Study & Hypothesis Pre-Registration | Sutton & Barto Ch 1–3, 8; MCTS survey; H1–H4 lock | 🔄 in progress | `v0.3-hypotheses` |
-| 3 — ISMCTS Core | Search, determinization, UCB1, H1 test | ⏳ | `v0.4-ismcts-core` |
-| 4 — Evaluator + Deck + Sim Submission | Heuristic evaluator, deck selection | ⏳ | `v0.5-sim-submission` |
-| 5 — Hypothesis Testing & Statistical Rigor | H2–H4 tests, sensitivity sweeps | ⏳ | — |
+| 2 — Study & Hypothesis Pre-Registration | Sutton & Barto Ch 1–3, 8; MCTS survey; H1–H4 lock | ✅ | `v0.3-hypotheses` |
+| 3 — ISMCTS Core | Search, determinization, UCB1, H1 test, diagnostic ladder | ✅ | `v0.4-ismcts-core` |
+| 4 — Evaluator + Deck + Sim Submission | Deck selection, time budget, determinization comparison | 🔄 in progress | `v0.5-sim-submission` |
+| 5 — Hypothesis Testing & Statistical Rigor | H3/H4 tests, sensitivity sweeps (H2 tested early, in Phase 4) | ⏳ | — |
 | 6 — Strategy Writeup & Submission | Strategy category deliverable | ⏳ | `v1.0.0` |
 
 **Hard deadlines:** Simulation category **16–17 Aug 2026**, Strategy
 category **13 Sep 2026**.
 
-Kaggle submissions so far:
+## Findings so far
 
-| # | Agent | Tag | Public score | Notes |
-|---|---|---|---|---|
-| 1 | RandomAgent | `v0.1-setup` | 364.6 | Ladder floor (stabilized after ~4 days). |
-| 2 | HeuristicAgent (first-`maxCount` selector) | `v0.2-baselines` | 527.9 | +163.3 above random on the ladder. Beats random locally at 0.755 win rate (Wilson 95% CI [0.691, 0.809], N = 200). |
+Full evidence in [`experiments/registry.md`](experiments/registry.md)
+(EXP-001 … EXP-010); each claim below names its experiment.
+
+- **H1 supported — under the condition it was stated for.** With the
+  opponent's list known (mirror), SO-ISMCTS at 1000 iterations beats the
+  deterministic heuristic 0.780, Wilson 95% CI [0.742, 0.814], N = 500
+  (EXP-003). The diagnostic ladder attributes the value mostly to search
+  itself (PIMC +24 pp over heuristic; the shared info-set tree adds
+  +3.8 pp, n.s.; the perfect-information ceiling is only +4.8 pp above
+  ISMCTS — EXP-004/005).
+- **The central finding to date is a construct-validity gap.** On the
+  Kaggle ladder the opponent's list is hidden; filling hidden zones with
+  a dummy card erases the entire search advantage: 0.506, Wilson
+  [0.462, 0.550] on the same 500 seeds — a paired −27.4 pp, McNemar
+  p = 1.2e-17 (EXP-009). Deep search against a wrong opponent model is
+  not neutral, it is confidently wrong. EXP-010 (running) prices the
+  cheapest deployable fix: assume the opponent plays our own list.
+- **H2 not supported.** Heuristic-guided rollouts did not beat random
+  rollouts at a fixed iteration budget (paired McNemar p = 0.279,
+  EXP-006); the pre-registered rule kept random rollouts.
+- **Deck and budget are settled (provisionally).** `current-v1` won a
+  four-candidate round-robin on the pre-registered maximin rule
+  (EXP-007; ADR-002, with a recorded erratum — revision gated on
+  EXP-011), and the submission runs an adaptive per-move time budget
+  derived from the live overage bank: 0 forfeits, cumulative p99
+  310.7 s against a 540 s target (EXP-008).
+
+## Kaggle submissions
+
+Details in [`docs/submission-log.md`](docs/submission-log.md). Ladder
+caveat, measured on our own frozen heuristic (drift 527.9 → 536.0 →
+497.8 over 11 days): **absolute ratings are not comparable across
+dates** — only differences read simultaneously are.
+
+| # | Agent | Public score | Notes |
+|---|---|---|---|
+| 1 | RandomAgent | 364.5 (final, inactive) | Ladder floor; validated the pipeline. |
+| 2 | HeuristicAgent (first-`maxCount` selector) | 497.8 (final, inactive) | Its own drift measures the ladder's non-stationarity. |
+| 3 | SO-ISMCTS, 500 fixed iters, filler determinization | 475.4 (7 d) | **Loses to our own heuristic on the ladder** while winning 78% locally — the gap EXP-009 then reproduced and priced locally. |
+| 4 | SO-ISMCTS + adaptive time budget (Policy C) | converging | Same deck and stack as #3, differing only in budget policy — a drift-immune A/B read. |
 
 ## Approach
 
 Full rationale lives in [`docs/adr/`](docs/adr/):
 
 - [ADR-001 — Why ISMCTS](docs/adr/adr-001-why-ismcts.md) — over MCTS / CFR / RL.
-- [ADR-002 — Why This Deck](docs/adr/adr-002-why-this-deck.md) — pending Phase 4.
+- [ADR-002 — Why This Deck](docs/adr/adr-002-why-this-deck.md) — accepted (EXP-007), with a recorded erratum; revision gated on EXP-011.
 - [ADR-003 — Hand-crafted heuristic evaluator, not learned](docs/adr/adr-003-heuristic-not-learned-evaluator.md).
 - [ADR-004 — Terminal reward, no shaping](docs/adr/adr-004-terminal-reward-not-shaped.md).
 
@@ -58,7 +94,8 @@ evaluator/     heuristic evaluator + rollout policies (Phase 4)
 stats/         Wilson, paired bootstrap, McNemar
 scripts/       local_ladder, submit, per-experiment exp_*.py
 submissions/   standalone Kaggle main.py variants (one per submitted agent)
-decks/         selected deck (Phase 0 placeholder; Phase 4 replaces)
+decks/         candidates (incl. the 4 official starters) + selected `current-v1`
+notebooks/     study notebooks (GridWorld MDP) + experiment analysis
 tests/         author runs `pytest tests/` — Claude Code never runs tests
 docs/          research.md, engineering.md, mdp-formalization.md, benchmark-protocol.md,
                rules-summary.md, game-primer.md, submission-log.md, risk-register.md,
