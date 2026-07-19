@@ -117,8 +117,11 @@ def main() -> None:
         for deck in DECKS:
             rows = data[(arm, deck)]
             outcomes = [rows[s]["outcome_for_a"] for s in range(1, N_PER_CELL + 1)]
+            # Producer encoding (local_ladder._sign): 1 win, 0 draw, -1
+            # loss. A first version of this script guessed the encoding
+            # and misfiled the -1 losses as draws — read, don't assume.
             wins = sum(1 for o in outcomes if o == 1)
-            draws = sum(1 for o in outcomes if o not in (0, 1))
+            draws = sum(1 for o in outcomes if o == 0)
             fallbacks = sum(rows[s]["fallbacks_a"] for s in range(1, N_PER_CELL + 1))
             median_s = statistics.median(
                 rows[s]["seconds"] for s in range(1, N_PER_CELL + 1)

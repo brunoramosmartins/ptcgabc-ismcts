@@ -662,12 +662,22 @@ is the quality of $P(h \mid I)$.
    `replay-deck-mining` stay parked as Phase-5 ideas with a measured
    ≲ 5 pp headroom attached; the threat-aware evaluator term (#23, H4
    ablation) is now the higher-expected-value knowledge investment.
-3. **An anomaly is recorded without interpretation: zero losses in 600
-   games.** Every non-win against the four starter decks is a draw
-   (8–21 per cell). Win rates treat draws as non-wins, so the gate
-   numbers are conservative; but the mechanism (turn-cap ties? starter
-   decks unable to close?) is queued for the Phase-4 note before any
-   claim leans on cross-deck win rates — EXP-011 in particular.
+3. **A "zero losses in 600 games" anomaly was reported and retracted
+   the same day — the instrument lesson again, this time at analysis
+   time.** The first read of the cells claimed every non-win was a
+   draw. The producer's encoding is `outcome_for_a ∈ {1, 0, −1}`
+   (`local_ladder._sign`); the analysis script *guessed* the encoding
+   and filed the −1 losses under "draws". Corrected: zero draws
+   anywhere (filler 29W–21L vs abomasnow, not 29W–21D). Nothing in the
+   gate moved — wins were counted correctly, so every CI and McNemar
+   stands — but the false claim reached the registry before the
+   trajectory corpus contradicted it: line 1 of the corpus shows
+   `reward_a = −1` in a cell the analysis called loss-free. Same family
+   as EXP-008's false "0/76 forfeits": an analysis that assumes the
+   producer's encoding instead of reading it will report phenomena that
+   are only its own guess. Registry corrected in place; the check is
+   now a comment in `scripts/exp010_analysis.py`, and EXP-011's
+   registration names the encoding explicitly.
 4. **The analysis lives in the repo, not in chat** —
    `scripts/exp010_analysis.py` reproduces every number in the registry
    entry from the gitignored JSONLs, keeping the claim → script → data
