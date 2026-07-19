@@ -50,6 +50,7 @@ if str(REPO_ROOT / "scripts") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from analyze_exp008 import pct  # noqa: E402
+
 from stats.wilson import wilson_interval  # noqa: E402
 
 _OK_STATUS = {"DONE", "TIMEOUT", "ACTIVE", "INACTIVE"}
@@ -60,13 +61,14 @@ def load_rows(pattern: str) -> list[dict]:
     rows: list[dict] = []
     for path in sorted(glob.glob(pattern)):
         opp = pathlib.Path(path).stem.split("_vs_")[-1]
-        for line in open(path):
-            line = line.strip()
-            if not line:
-                continue
-            r = json.loads(line)
-            r["_opp"] = opp
-            rows.append(r)
+        with open(path) as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                r = json.loads(line)
+                r["_opp"] = opp
+                rows.append(r)
     return rows
 
 

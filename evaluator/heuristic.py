@@ -89,7 +89,7 @@ class MoveScorer:
         scores = [self.score(o, obs) for o in options]
         if self._on("F5"):
             any_positive = any(
-                sc > 0 for o, sc in zip(options, scores)
+                sc > 0 for o, sc in zip(options, scores, strict=True)
                 if o.get("type") != ot.END
             )
             if any_positive:

@@ -149,7 +149,7 @@ def main() -> int:
     print("TOP 12 EVOLUTION FAMILIES (by end-stage damage):")
     print(f"{'root':<18}{'top card':<22}{'stage':<8}{'dmg':>5}{'cost':>5}"
           f"{'HP':>5}  ids-in-family")
-    for dmg, hp, root, top, cost, max_stage, n in scored[:12]:
+    for dmg, hp, root, top, cost, max_stage, _n in scored[:12]:
         fam_ids = sorted(m["id"] for m in families[root])
         print(f"{root:<18}{top['name']:<22}{('B', 'S1', 'S2')[max_stage]:<8}"
               f"{dmg:>5}{cost:>5}{hp:>5}  {fam_ids}")

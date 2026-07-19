@@ -39,11 +39,11 @@ def fit_linear(xs: list[float], ys: list[float]) -> tuple[float, float, float]:
     mx = sum(xs) / n
     my = sum(ys) / n
     sxx = sum((x - mx) ** 2 for x in xs)
-    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
     beta = sxy / sxx if sxx else 0.0
     alpha = my - beta * mx
     ss_tot = sum((y - my) ** 2 for y in ys)
-    ss_res = sum((y - (alpha + beta * x)) ** 2 for x, y in zip(xs, ys))
+    ss_res = sum((y - (alpha + beta * x)) ** 2 for x, y in zip(xs, ys, strict=True))
     r2 = 1.0 - ss_res / ss_tot if ss_tot else 0.0
     return (alpha, beta, r2)
 
@@ -68,10 +68,11 @@ def load_rows(pattern: str) -> list[dict]:
     rows: list[dict] = []
     for path in glob.glob(pattern):
         opp = pathlib.Path(path).stem.split("_vs_")[-1]
-        for line in open(path):
-            r = json.loads(line)
-            r["_opp"] = opp
-            rows.append(r)
+        with open(path) as fh:
+            for line in fh:
+                r = json.loads(line)
+                r["_opp"] = opp
+                rows.append(r)
     return rows
 
 

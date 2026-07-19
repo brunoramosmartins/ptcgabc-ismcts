@@ -70,6 +70,7 @@ a live match.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import random
 import sys
@@ -80,10 +81,8 @@ import sys
 # bundle dir) the CWD is that dir. Cover both, plus __file__ when it
 # does exist (normal import, e.g. tests).
 _ROOTS = ["/kaggle_simulations/agent", os.getcwd()]
-try:
+with contextlib.suppress(NameError):  # NameError = Kaggle exec() path
     _ROOTS.insert(0, os.path.dirname(os.path.abspath(__file__)))
-except NameError:  # pragma: no cover - Kaggle exec() path
-    pass
 for _root in _ROOTS:
     if _root and _root not in sys.path:
         sys.path.insert(0, _root)
