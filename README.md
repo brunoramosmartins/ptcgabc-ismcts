@@ -65,8 +65,8 @@ dates** — only differences read simultaneously are.
 |---|---|---|---|
 | 1 | RandomAgent | 364.5 (final, inactive) | Ladder floor; validated the pipeline. |
 | 2 | HeuristicAgent (first-`maxCount` selector) | 497.8 (final, inactive) | Its own drift measures the ladder's non-stationarity. |
-| 3 | SO-ISMCTS, 500 fixed iters, filler determinization | 475.4 (7 d) | **Loses to our own heuristic on the ladder** while winning 78% locally — the gap EXP-009 then reproduced and priced locally. |
-| 4 | SO-ISMCTS + adaptive time budget (Policy C) | converging | Same deck and stack as #3, differing only in budget policy — a drift-immune A/B read. |
+| 3 | SO-ISMCTS, 500 fixed iters, filler determinization | 483.1 (10 d) | **Loses to our own heuristic on the ladder** while winning 78% locally — the gap EXP-009 then reproduced and priced locally. |
+| 4 | SO-ISMCTS + adaptive time budget (Policy C) | 517.2 (3 d, converging) | Same deck and stack as #3, differing only in budget policy — a drift-immune A/B read: +34.1 over #3 simultaneous (interim). |
 
 ## Approach
 
