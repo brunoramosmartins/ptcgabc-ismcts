@@ -13,12 +13,20 @@ the archive; the runtime layout is:
 
 Two deliberate differences from the EXP-003 local run:
 
-1. **Opponent deck unknown.** On the ladder we don't know the
-   opponent's list, so determinization fills their hidden zones with a
-   Basic-Pokémon filler (`FILLER_CARD`) rather than sampling from a
-   known list. This is strictly weaker than the EXP-003 mirror setup —
-   the ladder rating reflects filler-determinized ISMCTS, a lower bound
-   on what informed determinization (open-ideas) could reach.
+1. **Opponent deck unknown — assumed to be our own list.** On the
+   ladder we don't know the opponent's list. The first ISMCTS submission
+   filled their hidden zones with a dummy Basic (`FILLER_CARD = 1072`),
+   and EXP-009 priced that choice: the filler's impossible-and-inert
+   opponent erases the entire search advantage (−27.4 pp paired vs
+   informed, McNemar p = 1.2e-17). EXP-010's pre-registered ship gate
+   promoted the cheapest deployable fix — determinize the opponent's
+   hidden zones *as if they play our own list*
+   (`opponent_list_is_assumed=True`): wrong but coherent, so the
+   simulated opponent has energy, trainers, and attackers, and fights
+   back. Against the four official starter decks this recovers +11.0 pp
+   over filler (paired McNemar p = 0.023), and the informed ceiling sits
+   only +5.0 pp further (n.s.) — knowing the true list buys little once
+   the worlds are coherent.
 
 2. **Adaptive time budget (Policy C), not fixed iterations.** Chosen by
    EXP-008 (#27); see `notes/phase4-time-budget-calibration.md`. The
@@ -97,7 +105,6 @@ ITERATION_CAP = 100_000     # never binds; the clock does
 # t_move * BUDGET_MOVES_AHEAD == 600 - OVERAGE_RESERVE.
 FALLBACK_MOVE_SECONDS = (600.0 - OVERAGE_RESERVE) / BUDGET_MOVES_AHEAD
 
-FILLER_CARD = 1072  # Snorlax — a Basic Pokémon, legal in the active slot
 _RNG = random.Random()
 _DECK: list[int] | None = None
 
@@ -146,12 +153,14 @@ def agent(obs_dict: dict) -> list[int]:
         return ismcts.decide(
             obs_dict,
             my_deck_list=_DECK,
-            opponent_deck_list=None,   # unknown on the ladder
+            # Unknown on the ladder: assume they play our list (EXP-010).
+            opponent_deck_list=list(_DECK),
             rng=_RNG,
             iterations=ITERATION_CAP,
-            filler_card=FILLER_CARD,
+            filler_card=None,
             max_seconds=budget_seconds(obs_dict),
             min_iterations=1,
+            opponent_list_is_assumed=True,
         )
     except (SearchApiError, DeterminizationError):
         return list(range(obs_dict["select"]["maxCount"]))

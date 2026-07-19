@@ -97,6 +97,28 @@ def test_fallback_cannot_overrun_the_bank(monkeypatch, tmp_path) -> None:
     assert spent <= 600.0 - module.OVERAGE_RESERVE
 
 
+def test_shim_determinization_is_assumed_own_list(monkeypatch, tmp_path) -> None:
+    # EXP-010's ship gate: the submission runs the selfdeck condition,
+    # not the filler. A silent revert here would re-ship the exact agent
+    # EXP-009 measured at 0.506 vs the zero-search heuristic.
+    module = _load_shim(monkeypatch, tmp_path)
+    deck = module.agent({"select": None})
+    captured: dict = {}
+
+    def fake_decide(obs_dict, **kwargs):
+        captured.update(kwargs)
+        return [0]
+
+    monkeypatch.setattr(module.ismcts, "decide", fake_decide)
+    result = module.agent({"select": {"maxCount": 1}, "remainingOverageTime": 600.0})
+    assert result == [0]
+    assert captured["opponent_list_is_assumed"] is True
+    assert captured["filler_card"] is None
+    assert captured["opponent_deck_list"] == deck
+    assert captured["opponent_deck_list"] is not module._DECK
+    assert not hasattr(module, "FILLER_CARD")
+
+
 def test_shim_budget_matches_agent(monkeypatch, tmp_path: pathlib.Path) -> None:
     # The pin: EXP-008 measured the agent, the ladder runs the shim.
     module = _load_shim(monkeypatch, tmp_path)
