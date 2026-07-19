@@ -641,3 +641,34 @@ is the quality of $P(h \mid I)$.
   expensive matchup (aggro-fire, $M$ up to 68) had not printed yet. Same
   error as the fit stage's reassuring 0/76 forfeits — a tail statistic read
   off a sample that structurally cannot contain the tail.
+
+### 2026-07-19 — EXP-010 closes on branch (a): the self-deck assumption ships
+
+**Decisions made:**
+
+1. **The pre-registered ship gate was applied mechanically and it
+   passed.** Pooled paired selfdeck−filler on shared seeds: **+11.0 pp,
+   McNemar exact p = 0.023**; per-deck guard clean (selfdeck nominally
+   better in all four cells, Wilson-separated worse in none). As
+   pre-committed in the registry, `ismcts-selfdeck` replaces the filler
+   condition in `submissions/ismcts_main.py` — #29 ships the assumed
+   own-list determinization, not "more search". No judgment call was
+   exercised at read time; the rule decided.
+2. **Phase-5 archetype inference is priced low and the number is
+   written down now.** The diagnostic ceiling informed − selfdeck is
+   **+5.0 pp, p = 0.24, n.s.** — the same shape as EXP-005's mirror
+   ceiling (+4.8 pp): once determinizations are *coherent*, knowing the
+   true list buys little. Consequence: `informed-determinization` and
+   `replay-deck-mining` stay parked as Phase-5 ideas with a measured
+   ≲ 5 pp headroom attached; the threat-aware evaluator term (#23, H4
+   ablation) is now the higher-expected-value knowledge investment.
+3. **An anomaly is recorded without interpretation: zero losses in 600
+   games.** Every non-win against the four starter decks is a draw
+   (8–21 per cell). Win rates treat draws as non-wins, so the gate
+   numbers are conservative; but the mechanism (turn-cap ties? starter
+   decks unable to close?) is queued for the Phase-4 note before any
+   claim leans on cross-deck win rates — EXP-011 in particular.
+4. **The analysis lives in the repo, not in chat** —
+   `scripts/exp010_analysis.py` reproduces every number in the registry
+   entry from the gitignored JSONLs, keeping the claim → script → data
+   chain auditable.
