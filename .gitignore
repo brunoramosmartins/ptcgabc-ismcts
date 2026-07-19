@@ -50,6 +50,7 @@ Thumbs.db
 
 # Project-specific: heavy raw match logs and figure regen artifacts
 results/*.jsonl
+results/*.jsonl.gz
 results/*.parquet
 !results/.gitkeep
 figures/*.png
