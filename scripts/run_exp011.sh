@@ -21,6 +21,12 @@ CHALLENGERS=(v1-tuned aggro-fire emboar-evolution)
 OPPS=(iono dragapult-ex mega-abomasnow-ex-official mega-lucario-ex)
 N="${EXP011_N:-50}"
 ITERS="${EXP011_ITERS:-1000}"
+# Raised bank (registry amendment 2026-07-19): the arms are
+# iteration-bounded and never read the clock, so the ladder's 600 s bank
+# can only inject artifact TIMEOUT losses against long-game decks — it
+# taxed only the challengers (the reused current-v1 cells closed clean,
+# so for them the raise is a no-op and cell-identity holds).
+BANK="${EXP011_BANK:-100000}"
 
 mkdir -p results
 
@@ -42,6 +48,7 @@ run_cell() {
     --deck-b "decks/candidates/${opp}.csv" \
     --matches "$((N - done))" --seed-start "$((1 + done))" \
     --iterations "$ITERS" \
+    --overage-bank "$BANK" \
     --out "$out" --append \
     --log-trajectories "$traj"
 }

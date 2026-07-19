@@ -682,3 +682,19 @@ is the quality of $P(h \mid I)$.
    `scripts/exp010_analysis.py` reproduces every number in the registry
    entry from the gitignored JSONLs, keeping the claim → script → data
    chain auditable.
+5. **EXP-011 amended after one cell: the engine's 600 s overage bank is
+   an instrument artifact under iteration-bounded arms, and it taxes
+   only the challengers.** The author stopped the run after spotting
+   `env_errors: 3` in the first cell summary — three ~603 s TIMEOUT
+   rows scored as losses for v1-tuned. The deployed agent cannot time
+   out (Policy C budgets under the bank by construction); the local
+   arms run 1000 fixed iterations and never read the clock, so locally
+   the bank only kills long-game decks. Since the reused `current-v1`
+   cells closed clean, the artifact biased the deck test *toward the
+   incumbent* — the one direction the tie-goes-to-incumbent rule must
+   never be helped from. Fix: `--overage-bank` in the runner (default
+   600 keeps EXP-003..010 ladder-faithful; the raise provably changes
+   no decision), amendment recorded in the registry before any verdict,
+   affected cell deleted and rerun. Bonus finding: the same sweep
+   surfaced one unchecked TIMEOUT in EXP-010's informed arm (seed 15 vs
+   iono) — addendum filed; the ceiling was conservative by ≤ 0.5 pp.

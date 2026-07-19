@@ -15,11 +15,12 @@ from scripts.local_ladder import (
     AGENT_REGISTRY,
     TrajectoryRecorder,
     _load_deck,
+    _parse_args,
     _sign,
     _wrap_for_cabt,
+    run_match,
     summarize,
 )
-
 
 DECK = [1000 + i for i in range(60)]
 DECK_B = [2000 + i for i in range(60)]
@@ -127,21 +128,21 @@ def test_official_candidate_decks_have_60_cards() -> None:
         assert len(deck) == 60, name
 
 
-def test_filler_card_is_pinned_to_the_submission_shim() -> None:
-    # The arm reproduces the ladder only if it fills with the same card the
-    # ladder agent fills with. A drift here would make EXP-009 measure a
-    # condition nothing is actually deployed under.
-    import re
-
+def test_filler_arm_is_the_frozen_exp009_condition() -> None:
+    # Until EXP-010's ship gate this test pinned the arm to the live
+    # shim. The shim now ships self-deck determinization (pinned by
+    # tests/test_ismcts_main_shim.py), and the filler arm survives as
+    # the *historical* EXP-009/-010 condition: the constant stays frozen
+    # at the value those experiments measured, and the shim must not
+    # grow a filler back without a registered experiment.
     from scripts.local_ladder import LADDER_FILLER_CARD
 
     shim = (
         pathlib.Path(__file__).resolve().parent.parent
         / "submissions" / "ismcts_main.py"
     ).read_text()
-    match = re.search(r"^FILLER_CARD = (\d+)", shim, re.MULTILINE)
-    assert match, "submissions/ismcts_main.py no longer defines FILLER_CARD"
-    assert int(match.group(1)) == LADDER_FILLER_CARD
+    assert LADDER_FILLER_CARD == 1072
+    assert "\nFILLER_CARD =" not in shim
 
 
 def test_sign_helper() -> None:
@@ -216,3 +217,15 @@ def test_load_deck_reads_60_lines(tmp_path: pathlib.Path) -> None:
     assert len(deck) == 60
     assert deck[0] == 1000
     assert deck[59] == 1059
+
+
+def test_overage_bank_default_is_ladder_faithful() -> None:
+    # EXP-003..010 all ran under the ladder's 600 s bank; the default
+    # must stay 600 so past and future ladder-faithful runs share the
+    # same condition, and raising it must be an explicit opt-in.
+    import inspect
+
+    args = _parse_args(["--agent-a", "random", "--agent-b", "random"])
+    assert args.overage_bank == 600.0
+    sig = inspect.signature(run_match)
+    assert sig.parameters["overage_bank"].default == 600.0

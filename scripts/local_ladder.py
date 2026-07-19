@@ -37,7 +37,7 @@ import json
 import pathlib
 import random
 import sys
-from typing import Callable, Iterable
+from collections.abc import Callable, Iterable
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
@@ -238,6 +238,7 @@ def run_match(
     seed: int,
     iterations: int,
     record_trajectories: bool = False,
+    overage_bank: float = 600.0,
 ) -> dict:
     """Play one match; returns per-match row including fallback details.
 
@@ -246,12 +247,29 @@ def run_match(
     caller writes it to the trajectory sink and strips it before the
     row reaches the summary JSONL — the two files serve different
     consumers and must not be mixed.
+
+    ``overage_bank`` is the per-seat thinking-time bank in seconds
+    (default 600, the ladder's value). See ``--overage-bank`` in the CLI
+    for when to raise it.
     """
     import time
 
     from kaggle_environments import make
 
     env = make("cabt", debug=False, configuration={"randomSeed": seed})
+    if overage_bank != 600.0:
+        # The 600 s bank is a *deployment* constraint: the shipped agent
+        # budgets under it (Policy C) and cannot overrun it by
+        # construction. The local fixed-iteration arms never read the
+        # clock, so under the default the bank can only inject artifact
+        # TIMEOUT losses against decks whose games run long (EXP-011's
+        # false start: 3 such losses in the first cell). Raising it
+        # changes no decision — search is iteration-bounded and seeded —
+        # it only removes the accidental kill switch. Patch the live
+        # state and the spec (the latter covers any internal reset).
+        env.specification["observation"]["remainingOverageTime"] = overage_bank
+        for _side in env.state:
+            _side["observation"]["remainingOverageTime"] = overage_bank
     agent_a = builder_a(seed, deck_a, deck_b, iterations)
     agent_b = builder_b(seed, deck_b, deck_a, iterations)
     rec_a = TrajectoryRecorder() if record_trajectories else None
@@ -380,6 +398,17 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
              "Adds serialization cost per decision — leave OFF for any "
              "timing-sensitive experiment. Honors --append.",
     )
+    p.add_argument(
+        "--overage-bank",
+        type=float,
+        default=600.0,
+        help="Per-seat thinking-time bank in seconds (default 600 — the "
+             "ladder's value; keep it for any ladder-faithful or "
+             "timing-sensitive run). The fixed-iteration arms never read "
+             "the clock, so under the default a slow cell can hit "
+             "TIMEOUT and score an artifact loss; raise the bank (e.g. "
+             "100000) for iteration-bounded experiments (EXP-011).",
+    )
     return p.parse_args(argv)
 
 
@@ -400,7 +429,9 @@ def main(argv: list[str] | None = None) -> int:
         args.log_trajectories.parent.mkdir(parents=True, exist_ok=True)
         # Append mode writes one gzip member per match; concatenated
         # members are a valid gzip stream, so resume works like --out.
-        traj_file = gzip.open(
+        # Opened conditionally and closed in the `finally` below — a
+        # `with` block cannot express the optional sink.
+        traj_file = gzip.open(  # noqa: SIM115
             args.log_trajectories, "ab" if args.append else "wb"
         )
     try:
@@ -408,7 +439,8 @@ def main(argv: list[str] | None = None) -> int:
             seed = args.seed_start + offset
             row = run_match(builder_a, builder_b, deck_a, deck_b, seed,
                             args.iterations,
-                            record_trajectories=traj_file is not None)
+                            record_trajectories=traj_file is not None,
+                            overage_bank=args.overage_bank)
             row["agent_a"] = args.agent_a
             row["agent_b"] = args.agent_b
             traj = row.pop("_traj", None)
