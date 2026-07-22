@@ -247,3 +247,31 @@ def test_overage_bank_patch_survives_env_reset() -> None:
     env.reset(2)
     for side in env.state:
         assert side["observation"]["remainingOverageTime"] == 100000.0
+
+
+def test_raised_bank_also_unbinds_run_timeout() -> None:
+    # EXP-011's third false start: a grindy emboar-evolution match
+    # crossed the engine's 2000 s episode wall-clock cap and env.run()
+    # raised DeadlineExceeded, aborting the sweep (no row written).
+    # runTimeout is honored from env.configuration, so the env factory
+    # must raise it whenever the bank is raised.
+    kaggle_environments = pytest.importorskip("kaggle_environments")
+
+    from scripts.local_ladder import _make_cabt_env
+
+    env = _make_cabt_env(16, 100000.0)
+    assert env.configuration.runTimeout == 2 * 100000.0 + 2000.0
+    env.reset(2)
+    for side in env.state:
+        assert side["observation"]["remainingOverageTime"] == 100000.0
+
+
+def test_default_bank_keeps_ladder_run_timeout() -> None:
+    # Ladder-faithful runs (EXP-003..010 semantics) must keep the cabt
+    # default runTimeout untouched.
+    kaggle_environments = pytest.importorskip("kaggle_environments")
+
+    from scripts.local_ladder import _make_cabt_env
+
+    env = _make_cabt_env(1, 600.0)
+    assert env.configuration.runTimeout == 2000

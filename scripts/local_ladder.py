@@ -263,6 +263,45 @@ def _raise_overage_bank(env: object, overage_bank: float) -> None:
         side["observation"]["remainingOverageTime"] = overage_bank
 
 
+def _make_cabt_env(seed: int, overage_bank: float) -> object:
+    """Make the ``cabt`` env for one match.
+
+    With the default 600 s bank the env is ladder-faithful and left
+    untouched. A raised bank also unbinds ``runTimeout`` — the engine's
+    2000 s wall-clock cap on the whole episode, enforced by
+    ``Environment.run`` raising ``DeadlineExceeded`` (which aborts the
+    sweep without writing a row, unlike the bank's TIMEOUT-loss path).
+    EXP-011's third false start was this second limit: grindy
+    emboar-evolution matches crossed 2000 s. Unlike the bank,
+    ``runTimeout`` is honored from ``env.configuration`` directly, so
+    passing it at ``make()`` time suffices — no schema-cache surgery.
+
+    Args:
+        seed: Engine ``randomSeed`` for the match.
+        overage_bank: Per-seat thinking-time bank in seconds.
+
+    Returns:
+        A freshly made ``cabt`` environment.
+    """
+    from kaggle_environments import make
+
+    configuration: dict[str, float | int] = {"randomSeed": seed}
+    if overage_bank != 600.0:
+        # The 600 s bank and the 2000 s runTimeout are *deployment*
+        # constraints: the shipped agent budgets under them (Policy C)
+        # and cannot overrun them by construction. The local
+        # fixed-iteration arms never read the clock, so the defaults
+        # can only kill long games by accident — TIMEOUT losses (bank)
+        # or aborted sweeps (runTimeout) — never change a decision:
+        # search is iteration-bounded and seeded. Two banks' worth
+        # covers both seats, plus the original episode allowance.
+        configuration["runTimeout"] = 2 * overage_bank + 2000.0
+    env = make("cabt", debug=False, configuration=configuration)
+    if overage_bank != 600.0:
+        _raise_overage_bank(env, overage_bank)
+    return env
+
+
 def run_match(
     builder_a: AgentBuilder,
     builder_b: AgentBuilder,
@@ -287,19 +326,7 @@ def run_match(
     """
     import time
 
-    from kaggle_environments import make
-
-    env = make("cabt", debug=False, configuration={"randomSeed": seed})
-    if overage_bank != 600.0:
-        # The 600 s bank is a *deployment* constraint: the shipped agent
-        # budgets under it (Policy C) and cannot overrun it by
-        # construction. The local fixed-iteration arms never read the
-        # clock, so under the default the bank can only inject artifact
-        # TIMEOUT losses against decks whose games run long (EXP-011's
-        # false start: 3 such losses in the first cell). Raising it
-        # changes no decision — search is iteration-bounded and seeded —
-        # it only removes the accidental kill switch.
-        _raise_overage_bank(env, overage_bank)
+    env = _make_cabt_env(seed, overage_bank)
     agent_a = builder_a(seed, deck_a, deck_b, iterations)
     agent_b = builder_b(seed, deck_b, deck_a, iterations)
     rec_a = TrajectoryRecorder() if record_trajectories else None

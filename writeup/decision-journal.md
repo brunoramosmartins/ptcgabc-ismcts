@@ -760,3 +760,31 @@ verdict). Side observation worth keeping: the two healed
 formerly-TIMEOUT seeds in v1-tuned vs iono both converted to WINS
 (34→36W), confirming the artifact's anti-challenger direction was real,
 not hypothetical.
+
+## 2026-07-22 — EXP-011: third instrument limit (runTimeout), fix without stopping the design
+
+**Decision.** The emboar-evolution row hit the engine's *third* clock:
+`runTimeout`, a 2000 s wall-clock cap on the whole episode that makes
+`env.run()` raise `DeadlineExceeded` — aborting the sweep with no row
+written (twice: vs iono seeds 7 and 16). Same class as the overage
+bank, different enforcement path: this one is honored directly from
+`env.configuration`, so the fix is one line at `make()` time
+(`local_ladder._make_cabt_env`, `runTimeout = 2·bank + 2000` whenever
+the bank is raised) — none of the schema-cache surgery of 07-20.
+Registry Amendment 3 records it; two regression tests pin the raised
+and the ladder-faithful defaults.
+
+**Observation kept for Threats to Validity.** The crashing seed 7
+completed in 120 s on a fresh rerun after crashing at 2001.9 s — a 16×
+wall-clock gap on the same engine seed. Leading hypothesis: host
+suspend inflated the elapsed clock mid-match; alternative: agent-side
+nondeterminism in game length. Neither threatens the design — pairing
+is anchored on the engine seed (the deal), and a completed game's
+outcome is clock-independent — but wall-clock quantities from this
+sweep should not be over-interpreted, and any timing claim in the
+writeup must come from a dedicated run, not from EXP-011.
+
+**What did NOT happen.** No rule change, no N change, no heal needed
+(a `DeadlineExceeded` abort writes nothing, so there are no poisoned
+rows to remove); the sweep resumes at the first missing seed with the
+fixed factory.
