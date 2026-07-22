@@ -698,3 +698,65 @@ is the quality of $P(h \mid I)$.
    affected cell deleted and rerun. Bonus finding: the same sweep
    surfaced one unchecked TIMEOUT in EXP-010's informed arm (seed 15 vs
    iono) — addendum filed; the ceiling was conservative by ≤ 0.5 pp.
+
+### 2026-07-20 — EXP-011 second false start: the bank fix didn't survive the engine's reset
+
+**Decisions made:**
+
+1. **The run was stopped again, ~12 h in, on the author's read of the
+   partial summaries — and the 2026-07-19 fix is declared ineffective.**
+   Eleven more TIMEOUT rows at ~600–615 s appeared across five cells
+   despite `--overage-bank 100000`, all on our seat, all scored as
+   challenger losses: the same anti-challenger artifact the amendment
+   was written to remove. The root cause was read from the engine
+   source, not guessed: `env.run()` unconditionally calls `reset()` on
+   a fresh env, and the reset rebuilds each seat's state from
+   per-position schema caches built at `make()` time with the spec's
+   600 s default — so patching `env.state` and `env.specification`
+   after `make()` was silently discarded before the first move. The
+   fix (`local_ladder._raise_overage_bank`) also drops those caches so
+   the reset regenerates from the patched spec, and a regression test
+   now pins the exact failure mode: the patch must survive a reset.
+2. **The validation probe itself was diagnosed as worthless, and
+   replaced.** The 2026-07-19 instruction validated the fix on seed 1 —
+   a seed that never timed out under the *old* bank, so the probe could
+   not distinguish a working patch from a broken one. It "passed" and
+   the broken patch ran for 12 h. New rule, applied here and kept for
+   future instrument fixes: validate on an input known to exercise the
+   failure (a seed that DID time out — v1-tuned vs iono seed 5), never
+   on one known to pass regardless. The rule paid off on its first use:
+   the probe crashed the first version of the new fix (the in-memory
+   spec entry is a property-spec *object*, so writing a bare number
+   over it corrupts the schema once the caches are dropped; the bank
+   belongs under its `default` key) — a bug the seed-1 probe would
+   have waved through again.
+3. **Clean rows are kept; only poisoned seeds are rerun.** Search is
+   iteration-bounded and seeded, so the bank cannot change any decision
+   in a game that completed — a raised bank differs only in games the
+   old bank killed. Healing exactly the TIMEOUT seeds
+   (`scripts/heal_exp011_env_errors.sh`, idempotent, gap-based, safe
+   under interruption) therefore yields cells *identical* to a full
+   rerun while saving the ~12 h already spent. The trajectory corpus
+   keeps the aborted lines next to the healed ones (diagnostic only,
+   keyed by seed; consumers prefer non-null rewards).
+
+### 2026-07-21 — EXP-011 interim peek (logged before completion; rule untouched)
+
+**Peek, with the run at 397/600 challenger matches** (v1-tuned complete,
+aggro-fire at 197/200, emboar-evolution not started; all healed and new
+rows carry 0 env_errors — the reset-surviving bank fix held in practice).
+Descriptive pooled win rates vs the 4-starter field: incumbent
+`current-v1` 159/200 (0.795, from EXP-010's reused selfdeck cells);
+`v1-tuned` 153/200 (0.765); `aggro-fire` 132/197 (0.670, including a
+50–0 sweep of dragapult-ex and a 9W–41L collapse vs mega-abomasnow —
+by-cell variance far beyond anything EXP-007 showed on the homemade
+pool). Direction: toward branch (a), `current-v1` survives — v1-tuned
+trails the pooled paired contrast (net −6 on shared instances) and
+aggro-fire's abomasnow cell is Wilson-separated worse, failing the
+guard. **No decision is taken here**: the pre-registered rule runs only
+on the complete grid via `scripts/exp011_analysis.py` (written today;
+`--interim` mode exists precisely so a peek cannot morph into an early
+verdict). Side observation worth keeping: the two healed
+formerly-TIMEOUT seeds in v1-tuned vs iono both converted to WINS
+(34→36W), confirming the artifact's anti-challenger direction was real,
+not hypothetical.
