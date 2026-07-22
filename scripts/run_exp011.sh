@@ -15,6 +15,10 @@
 # Paired seeds per cell, so challenger-vs-incumbent contrasts are
 # McNemar-ready on shared (opponent, seed) instances. Trajectory corpus
 # stays on. Per-match JSONL flush + --append make every cell resumable.
+#
+# If any cell reports env_errors > 0, do NOT analyze it: run
+# scripts/heal_exp011_env_errors.sh to drop the poisoned rows and rerun
+# exactly those seeds, then re-run this sweep to finish remaining cells.
 set -euo pipefail
 
 CHALLENGERS=(v1-tuned aggro-fire emboar-evolution)

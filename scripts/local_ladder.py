@@ -230,6 +230,39 @@ def _wrap_for_cabt(
     return _fn
 
 
+def _raise_overage_bank(env: object, overage_bank: float) -> None:
+    """Raise the per-seat overage bank on a freshly made ``cabt`` env.
+
+    Writing ``env.state`` or ``env.specification`` alone is NOT enough:
+    ``env.run()`` always calls ``reset()`` on a fresh env, and the reset
+    rebuilds each seat's state from per-position schema caches
+    (``__state_schema_0``/``__state_schema_1``) that were built at
+    ``make()`` time with the spec's 600 s default — silently restoring
+    the old bank (EXP-011's second false start: TIMEOUT rows at ~600 s
+    with the bank nominally raised to 100000). So this patches the live
+    spec AND drops those caches, forcing the reset to regenerate them
+    from the patched spec. The current state is patched too for
+    completeness (any pre-reset reader sees the same value).
+
+    In the in-memory spec ``remainingOverageTime`` is a full
+    property-spec object (description/shared/type/minimum/default), not
+    the bare number seen in ``cabt.json`` — the bank goes under its
+    ``default`` key. Assigning a bare number replaces the object and
+    corrupts the schema: the rebuild then fails metaschema validation
+    (``100000.0 is not of type 'object'``), which is exactly how the
+    first version of this fix died in the validation probe.
+    """
+    env.specification["observation"]["remainingOverageTime"]["default"] = overage_bank
+    for position in range(len(env.state)):
+        # Environment.__get_state caches via setattr with a literal
+        # string, so the attribute name is NOT mangled.
+        key = f"__state_schema_{position}"
+        if hasattr(env, key):
+            delattr(env, key)
+    for side in env.state:
+        side["observation"]["remainingOverageTime"] = overage_bank
+
+
 def run_match(
     builder_a: AgentBuilder,
     builder_b: AgentBuilder,
@@ -265,11 +298,8 @@ def run_match(
         # TIMEOUT losses against decks whose games run long (EXP-011's
         # false start: 3 such losses in the first cell). Raising it
         # changes no decision — search is iteration-bounded and seeded —
-        # it only removes the accidental kill switch. Patch the live
-        # state and the spec (the latter covers any internal reset).
-        env.specification["observation"]["remainingOverageTime"] = overage_bank
-        for _side in env.state:
-            _side["observation"]["remainingOverageTime"] = overage_bank
+        # it only removes the accidental kill switch.
+        _raise_overage_bank(env, overage_bank)
     agent_a = builder_a(seed, deck_a, deck_b, iterations)
     agent_b = builder_b(seed, deck_b, deck_a, iterations)
     rec_a = TrajectoryRecorder() if record_trajectories else None

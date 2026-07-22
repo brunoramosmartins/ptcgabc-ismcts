@@ -229,3 +229,21 @@ def test_overage_bank_default_is_ladder_faithful() -> None:
     assert args.overage_bank == 600.0
     sig = inspect.signature(run_match)
     assert sig.parameters["overage_bank"].default == 600.0
+
+
+def test_overage_bank_patch_survives_env_reset() -> None:
+    # EXP-011's second false start: the first patch wrote env.state and
+    # env.specification, but env.run() always resets a fresh env, and
+    # the reset rebuilds state from per-position schema caches built at
+    # make() time — silently restoring the 600 s bank (TIMEOUT rows at
+    # ~600 s with the bank nominally raised to 100000). The fix must
+    # survive a reset, so that is exactly what this test does.
+    kaggle_environments = pytest.importorskip("kaggle_environments")
+
+    from scripts.local_ladder import _raise_overage_bank
+
+    env = kaggle_environments.make("cabt", debug=False)
+    _raise_overage_bank(env, 100000.0)
+    env.reset(2)
+    for side in env.state:
+        assert side["observation"]["remainingOverageTime"] == 100000.0
