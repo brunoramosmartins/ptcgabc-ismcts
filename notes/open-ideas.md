@@ -983,4 +983,51 @@ CIs. Note ISMCTS's determinizer already supports asymmetric lists
 
 ---
 
+### official-starter-as-candidate — Test the official Mega Abomasnow starter list as *our* deck
+
+**Motivation.**
+ADR-002's erratum identified the official Mega Abomasnow ex starter as
+"the most informative candidate available" — same archetype as
+`current-v1`, but a support suite The Pokémon Company tuned a rule-based
+agent around, differing in 11 of 60 cards. EXP-011 paid the erratum's
+re-evaluation debt with the official lists on the *opponent* side only;
+no experiment has ever piloted that list from our seat. One suggestive
+but confounded data point exists: `ismcts-selfdeck` piloting
+`current-v1` beats `heuristic` piloting the official list 36–14
+(EXP-010/011 shared cell) — but that mixes the agent gap with the deck
+gap.
+
+**Formal statement.**
+Add `official-abomasnow` as a fifth candidate row to the EXP-011 design:
+`ismcts-selfdeck` (1000 iters) piloting the official list vs `heuristic`
+on the four official starters, N = 50 paired seeds 1..50 — cell-identical
+protocol, directly comparable to the existing grid. Same selection rule
+as EXP-011 (pooled paired McNemar vs `current-v1` on shared seeds,
+worse-cell Wilson guard, tie to the incumbent).
+
+**Literature.**
+None needed — this is a candidate-set completion of EXP-007/EXP-011, not
+a new method. The construct-validity framing is already recorded in
+ADR-002's erratum and the registry.
+
+**Where in the roadmap.**
+Phase 5 at the earliest, and only if the ladder shows `current-v1`
+underperforming its local numbers. EXP-011's margins (the incumbent beat
+every tested challenger; the two Fire decks are significantly worse)
+make this exploration, not a gate — it must not displace #28/#29 or the
+threat-aware-evaluator work.
+
+**Risk to scope.**
+~200 matches ≈ 7–20 h of CPU at observed paces. Zero code: the runner
+already takes `--deck-a`. The real cost is attention this close to the
+Simulation deadline; descope by simply not running it before Aug 16.
+
+**Status.**
+
+- **idea** — 2026-07-23 (named as the honest residual in ADR-002's
+  Reaffirmation: EXP-011 closed on branch (a) without ever testing the
+  erratum's "most informative missing candidate" from our seat).
+
+---
+
 _(Next idea goes here — copy the schema block above.)_

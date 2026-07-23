@@ -1,11 +1,13 @@
 # ADR-002 — Why This Deck
 
-**Status:** accepted (2026-07-15), **with a material erratum of 2026-07-16
-— see Erratum below. The decision stands provisionally; formal revision is
-gated on EXP-011 (deck re-evaluation, originally slated as EXP-010 —
-renumbered 2026-07-17 when EXP-010 was claimed by the determinization
-comparison EXP-009 branch (a) pre-committed).** Supersedes the Phase-0
-placeholder note in `decks/selected/rationale.md`.
+**Status:** accepted (2026-07-15), with a material erratum of 2026-07-16
+(see Erratum below; formal revision was gated on EXP-011 — the deck
+re-evaluation originally slated as EXP-010, renumbered 2026-07-17 when
+EXP-010 was claimed by the determinization comparison EXP-009 branch (a)
+pre-committed). **Reaffirmed 2026-07-23 on real-field evidence: EXP-011
+closed on branch (a) — see Reaffirmation below; the provisional status is
+lifted.** Supersedes the Phase-0 placeholder note in
+`decks/selected/rationale.md`.
 **Decision:** keep the Phase-0 sample list, now promoted to a deliberate
 choice under the name **`current-v1`**, as `decks/selected/deck.csv`.
 **Evidence:** EXP-007 (`experiments/registry.md`); process in
@@ -77,6 +79,47 @@ us; and now the deck was selected against a pool we invented. Every time we
 *authored* the test condition instead of importing it from the deployment
 environment, the two diverged. That belongs in Threats to Validity as a
 methodological finding, not as three separate footnotes.
+
+## Reaffirmation (2026-07-23)
+
+EXP-011 ran the gate the Erratum demanded: the exact shipping condition
+(`ismcts-selfdeck`, 1000 iterations — the instrument EXP-010 fixed first,
+because a deck ranking is only as valid as the agent that measures it)
+piloting all four EXP-007 candidates against `heuristic` on the four
+official starter decks, including the real Mega Abomasnow ex list this
+document once confused with ours. N = 50 paired seeds per cell; full
+numbers and validity flags in `experiments/registry.md` (EXP-011).
+
+| candidate | pooled wr (Wilson 95 %) | paired Δ vs `current-v1` | McNemar p (Bonf m = 3) | worse-separated cells |
+|---|---|---|---|---|
+| **`current-v1`** | **0.795** [0.734, 0.845] | — | — | — |
+| `v1-tuned` | 0.765 [0.702, 0.818] | −3.0 pp | 0.55 (1.0) | 0 |
+| `aggro-fire` | 0.670 [0.602, 0.731] | −12.5 pp | 0.0035 (0.011) | 1 |
+| `emboar-evolution` | 0.385 [0.320, 0.454] | −41.0 pp | 1.1e-18 (3.3e-18) | 3 |
+
+The pre-registered replacement gate never fires: the only challenger not
+significantly worse (`v1-tuned`) is statistically indistinguishable, and
+ties go to the incumbent by rule. Three findings close the Erratum's
+three points:
+
+1. **The proxy pool gave the right answer anyway.** EXP-007's ranking
+   (`current-v1` > `v1-tuned` > `aggro-fire` > `emboar-evolution`) is
+   reproduced in exactly the same order by the real field. The
+   construct-validity hole was real — but immaterial to this particular
+   decision, which is itself a finding about when homemade pools suffice.
+2. **Maximin is vindicated against the actual field.** `aggro-fire`
+   sweeps dragapult-ex 50–0 and collapses 9–41 against the official
+   Abomasnow starter — the high-average, fragile-floor profile the
+   selection rule was built to reject, now demonstrated on real
+   opponents rather than argued from a homemade matrix.
+3. **One residual, named honestly.** The Erratum's "most informative
+   missing candidate" — the official Abomasnow starter *as our deck* —
+   was outside EXP-011's registered candidate set (it appears on the
+   opponent side only) and remains untested. Parked in
+   `notes/open-ideas.md` (official-starter-as-candidate); not a blocker
+   for #29 given `current-v1`'s margin over every tested alternative.
+
+**Decision unchanged: `current-v1` ships in #29.**
 
 ## Context
 

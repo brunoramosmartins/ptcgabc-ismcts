@@ -761,7 +761,7 @@ formerly-TIMEOUT seeds in v1-tuned vs iono both converted to WINS
 (34→36W), confirming the artifact's anti-challenger direction was real,
 not hypothetical.
 
-## 2026-07-22 — EXP-011: third instrument limit (runTimeout), fix without stopping the design
+### 2026-07-22 — EXP-011: third instrument limit (runTimeout), fix without stopping the design
 
 **Decision.** The emboar-evolution row hit the engine's *third* clock:
 `runTimeout`, a 2000 s wall-clock cap on the whole episode that makes
@@ -788,3 +788,39 @@ writeup must come from a dedicated run, not from EXP-011.
 (a `DeadlineExceeded` abort writes nothing, so there are no poisoned
 rows to remove); the sweep resumes at the first missing seed with the
 fixed factory.
+
+### 2026-07-23 — EXP-011 closes on branch (a): `current-v1` survives the real field; ADR-002 reaffirmed
+
+**Decision.** The complete grid (12/12 cells at 50/50, 0 draws, 0
+env-error rows, fallbacks 0) went through `scripts/exp011_analysis.py`
+and the pre-registered rule lands on **branch (a)**: no challenger
+fires the gate. `v1-tuned` is statistically indistinguishable from the
+incumbent (−3.0 pp pooled paired, McNemar p = 0.55) — and ties go to
+the incumbent by rule; `aggro-fire` (−12.5 pp, corrected p = 0.011)
+and `emboar-evolution` (−41.0 pp, corrected p = 3.3e-18) are
+significantly *worse*, and both fail the worse-cell Wilson guard on
+top. ADR-002 gains a Reaffirmation section and drops its provisional
+status; the erratum's re-evaluation debt is paid; #28 (final
+tournament) and #29 (submission) proceed unchanged with `current-v1`.
+
+**Worth keeping for the writeup.** (1) EXP-007's homemade-pool ranking
+is reproduced in exactly the same order by the real field — the third
+construct-validity gap of the project turned out immaterial to the
+decision it gated, which is itself a finding about when proxy pools
+suffice (and belongs next to the "we authored the test condition"
+pattern, as its partial counterweight). (2) `aggro-fire`'s 50–0 sweep
+of dragapult-ex sitting beside its 9–41 collapse against the official
+Abomasnow starter is the cleanest demonstration of why the selection
+criterion is maximin — better evidence than anything the homemade
+matrix produced. (3) Instrument honesty: the longest completed match
+in the whole grid was 1293 s, under the 2000 s runTimeout — the 07-22
+unbind was never provably exercised in-run, consistent with the
+host-suspend reading of the two crashes; its guarantee remains the
+regression tests' config assertion.
+
+**Residual, named.** The official Abomasnow starter *as our deck* —
+the erratum's "most informative missing candidate" — was outside the
+registered candidate set (opponent side only) and remains untested.
+Parked as `official-starter-as-candidate` in `notes/open-ideas.md`
+(Phase 5 at the earliest, gated on ladder underperformance); not a
+blocker for #29 given the margins.
