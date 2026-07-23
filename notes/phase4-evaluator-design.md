@@ -104,6 +104,40 @@ finding.
 3. Weights v1: start uniform (all 1.0) or hand-ranked (e.g. F1=2.0)?
    Uniform is cleaner for H4 interpretation; ranked may help H2.
 
+## F7 intake (2026-07-23) — the threat-aware rule
+
+The v1 rule "no damage math" is amended for exactly one feature. F7
+implements the aggregate-threat idea distilled in
+`notes/open-ideas.md::threat-aware-evaluator` (a knowledge-heavy public
+agent above us on the ladder models the opponent in the evaluator, not
+the simulation), under its recorded descope rule: **one feature, one
+weight, measured by H4 — or it does not enter at all.**
+
+- **Model** (`evaluator/threat.py`): $T(\text{obs}) = \max_{p \in B}
+  D(p, e_p + 1)$ over the opponent's visible board, where $D(p, e)$ is
+  the max printed damage among moves of $p$ costing $\le e$. Public
+  card data only (the Kaggle CSV); no hidden zones read. Two accepted
+  approximations pull in *opposite* directions: printed-base damage
+  parsing is a floor ("100×" → 100), color-blind cost counting is a
+  ceiling (a move the attached colors cannot actually pay may be
+  admitted) — $T$ is a heuristic signal, not a bound; exercise 4 in
+  `exercises/ex04_evaluator_math.md` derives both directions.
+- **Rule** (in `MoveScorer.score`): when our active's *remaining* HP is
+  within $T$, RETREAT gains $+W \cdot \text{prizes}(\text{active})$.
+  Against F6's standing $-W$, the net is prizes−1: a plain attacker
+  still trades, an ex (+1) and especially a Mega ex (+2) retreats out —
+  prize-trade management derived from our own card data, no transcribed
+  constants.
+- **Schema discipline:** the in-play entry fields F7 reads (`hp` =
+  remaining, `len(energies)` = attached count) are confirmed against
+  the EXP-010 trajectory corpus by `scripts/probe_inplay_schema.py` —
+  the corpus turned out to be its own probe (third payoff of recording
+  trajectories). Re-run after any engine update.
+- **H4 impact:** the ablation family grows to k = 7; the Bonferroni
+  correction moves from α/6 to α/7. F7 defaults to inert
+  (`threat=None`) everywhere until the H2 re-test / H4 ablation says
+  otherwise — nothing currently shipping changes.
+
 ## Lessons Learned
 
 _(filled at merge time.)_
