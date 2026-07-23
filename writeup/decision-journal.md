@@ -824,3 +824,39 @@ registered candidate set (opponent side only) and remains untested.
 Parked as `official-starter-as-candidate` in `notes/open-ideas.md`
 (Phase 5 at the earliest, gated on ladder underperformance); not a
 blocker for #29 given the margins.
+
+### 2026-07-23 — EXP-012 registered (#28) and the F7 threat rule lands (parallel track)
+
+**Decision 1 — the final tournament validates the artifact, not the
+instrument.** EXP-012 is registered (before any match): a new
+`ismcts-main` ladder arm runs `submissions/ismcts_main.py`'s exact
+configuration — selfdeck + Policy C adaptive clock, constants pinned
+to the submission module by a regression test — against the 4-starter
+field on seeds 1..50, ladder-faithful (default 600 s bank, default
+runTimeout, no trajectory recording). Rationale: every Phase-4
+decision was measured at fixed 1000 iterations, but what ships is a
+wall-clock budget; the paired contrast against EXP-010/011's
+`current-v1` rows on shared seeds is the last gap between "what we
+measured" and "what we upload". Gate and branches pre-registered;
+prior is (a) pass, since the local clock yields >1000 iters/move.
+Known limitation stated at registration: local CPU ≠ Kaggle worker —
+this validates budget logic and consistency, not deployed strength.
+
+**Decision 2 — F7 enters under the descope rule.** The threat-aware
+idea (open-ideas, 2026-07-17) is implemented as **one feature with
+one weight**: `evaluator/threat.py` computes the worst-case aggregate
+threat $T$ from public card data (+1-energy assumption, printed-base
+damage floor), and the scorer's F7 boosts RETREAT by prizes(active)·W
+when remaining HP ≤ T — net of F6, a plain attacker still trades
+while an ex/Mega ex retreats out. Nothing shipping changes: F7 is
+inert (`threat=None`) until the H2 re-test / H4 ablation (family now
+k = 7, α/7) measures it. Schema honesty: the in-play fields F7 reads
+were confirmed against the EXP-010 trajectory corpus — the corpus is
+its own probe, and `scripts/probe_inplay_schema.py` re-verifies with
+a loud failure on empty input, per the probe-check rule.
+
+**What did NOT happen.** No constants were transcribed from the
+public notebook (weights derive from our card CSV and the uniform
+W = 1.0); the truncated-rollout consumer stays parked; no change to
+`submissions/ismcts_main.py` — F7 and EXP-012 are exactly the split
+between the parallel track and the deadline track.

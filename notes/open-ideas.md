@@ -284,9 +284,17 @@ Descope rule: the threat term enters as **one feature with one weight**,
 measured by H4, or it does not enter at all.
 
 **Status.**
-idea (2026-07-17), distilled from a public-notebook analysis (chat
-record); no code or constants copied, per the same restraint rule as
-[[replay-deck-mining]].
+
+- **idea** — 2026-07-17, distilled from a public-notebook analysis
+  (chat record); no code or constants copied, per the same restraint
+  rule as [[replay-deck-mining]].
+- **in progress (Phase 4)** — 2026-07-23: consumer 1 implemented under
+  the descope rule as feature **F7** (`evaluator/threat.py` +
+  `MoveScorer`; design note "F7 intake" section). Inert by default
+  (`threat=None`); its value gets measured by the H2 re-test and the
+  H4 ablation (now k = 7), not assumed. Consumer 2
+  (truncated-rollout evaluation) stays parked — EXP-010's verdict was
+  that self-deck recovers ~11 of the 16 pp, so deep simulation stays.
 
 ### informed-determinization — Non-uniform $P(h \mid I)$ using public information
 
