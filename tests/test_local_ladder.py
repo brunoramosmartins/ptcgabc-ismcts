@@ -275,3 +275,29 @@ def test_default_bank_keeps_ladder_run_timeout() -> None:
 
     env = _make_cabt_env(1, 600.0)
     assert env.configuration.runTimeout == 2000
+
+
+def test_ismcts_main_arm_matches_submission() -> None:
+    # The EXP-012 arm duplicates the submission's Policy C constants
+    # (submissions/ has no package __init__ by design); this pin is the
+    # only thing keeping the two from drifting apart.
+    import importlib.util
+
+    src = (pathlib.Path(__file__).resolve().parent.parent
+           / "submissions" / "ismcts_main.py")
+    spec = importlib.util.spec_from_file_location("ismcts_shim_exp012", src)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    from scripts.local_ladder import AGENT_REGISTRY
+
+    deck = list(range(60))
+    agent = AGENT_REGISTRY["ismcts-main"](7, deck, [0] * 60, 1000)
+    assert agent.adaptive_budget is True
+    assert agent.iterations == module.ITERATION_CAP
+    assert agent.overage_reserve == module.OVERAGE_RESERVE
+    assert agent.budget_moves_ahead == module.BUDGET_MOVES_AHEAD
+    assert agent.min_iterations == 1
+    assert agent.opponent_list_is_assumed is True
+    assert agent.opponent_deck_list == deck  # selfdeck, not the real list

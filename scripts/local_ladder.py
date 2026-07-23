@@ -134,6 +134,37 @@ def _ismcts_selfdeck_builder(seed: int, my_deck: list[int],
     )
 
 
+def _ismcts_main_builder(seed: int, my_deck: list[int],
+                         opp_deck: list[int], iterations: int) -> Agent:
+    """The shipping configuration end-to-end (EXP-012 / #28 arm).
+
+    Mirrors `submissions/ismcts_main.py`: selfdeck determinization plus
+    the Policy C adaptive time budget. `iterations` is ignored on
+    purpose — on the ladder the clock binds and the iteration count is
+    only a never-binding safety cap, so honoring the flag here would
+    measure a configuration that never ships. The Policy C constants
+    are duplicated from the submission module (which cannot be imported
+    as a package by design) and pinned to it by
+    `tests/test_local_ladder.py::test_ismcts_main_arm_matches_submission`.
+
+    Run this arm with the DEFAULT overage bank: Policy C budgets under
+    the 600 s bank by construction, and demonstrating that under the
+    ladder-faithful clock is part of what the arm validates.
+    """
+    del opp_deck, iterations  # deployment condition; the clock binds
+    return ISMCTSAgent(
+        my_deck_list=my_deck,
+        opponent_deck_list=list(my_deck),
+        opponent_list_is_assumed=True,
+        iterations=100_000,        # == ismcts_main.ITERATION_CAP
+        adaptive_budget=True,
+        overage_reserve=60.0,      # == ismcts_main.OVERAGE_RESERVE
+        budget_moves_ahead=80,     # == ismcts_main.BUDGET_MOVES_AHEAD
+        min_iterations=1,
+        rng=random.Random(seed),
+    )
+
+
 def _pimc_builder(seed: int, my_deck: list[int], opp_deck: list[int],
                   iterations: int) -> Agent:
     return PIMCAgent(
@@ -173,6 +204,7 @@ AGENT_REGISTRY: dict[str, AgentBuilder] = {
     "ismcts-filler": _ismcts_filler_builder,   # EXP-009: deployment condition
     "ismcts-selfdeck": _ismcts_selfdeck_builder,  # EXP-010: assumed own list
     "ismcts-guided": _ismcts_guided_builder,   # H2 treatment arm
+    "ismcts-main": _ismcts_main_builder,       # EXP-012: shipping config
     "pimc": _pimc_builder,
     "oracle": _oracle_builder,   # LOCAL DIAGNOSTIC ONLY — never submit
 }
