@@ -33,7 +33,10 @@ if str(REPO_ROOT) not in sys.path:
 from kaggle_environments.envs.cabt.cg import sim  # noqa: E402
 
 from env.search_engine import (  # noqa: E402
-    expected_counts, search_begin, search_end, search_step,
+    expected_counts,
+    search_begin,
+    search_end,
+    search_step,
 )
 
 SNORLAX, BASIC_ENERGY = 1072, 1

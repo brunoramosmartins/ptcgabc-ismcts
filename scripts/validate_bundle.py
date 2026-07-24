@@ -30,6 +30,14 @@ import tempfile
 
 DEFAULT_BUNDLE = "build/submission-ismcts.tar.gz"
 
+# Must strictly exceed the engine's own whole-episode backstop
+# (`runTimeout = 2000`), or this harness can kill a match the platform
+# would have allowed and report our own impatience as a bundle failure.
+# The old 900 s was sized for the fixed-500-iteration shim (~45 s
+# self-play); under the adaptive budget each agent may legitimately spend
+# up to its full 600 s bank, so two agents can run far past that.
+SELF_PLAY_TIMEOUT = 2100
+
 # Runs inside the extracted bundle dir. Loads the agent BY PATH so
 # kaggle-environments execs it exactly as the worker does. debug=True
 # surfaces agent exceptions instead of silently marking ERROR.
@@ -46,17 +54,22 @@ except Exception:
     traceback.print_exc()
     sys.exit(2)
 
-bad = False
+bad = []
 for i in range(2):
     st = env.state[i]
-    print(f"agent {i}: status={st['status']} reward={st['reward']}")
-    if st["status"] == "ERROR":
-        bad = True
+    obs = st.get("observation") or {}
+    print(f"agent {i}: status={st['status']} reward={st['reward']} "
+          f"remainingOverageTime={obs.get('remainingOverageTime')}")
+    # ERROR = crashed before deciding. TIMEOUT = drained the 600s bank,
+    # which is the failure mode the adaptive budget (EXP-008) exists to
+    # prevent — a check that only looks for ERROR would pass a forfeit.
+    if st["status"] in ("ERROR", "TIMEOUT"):
+        bad.append(f"agent {i}: {st['status']}")
 
 n_decisions = len(env.steps)
 print(f"steps: {n_decisions}")
 if bad:
-    print("SELF-PLAY FAILED: an agent errored (see traceback above)")
+    print("SELF-PLAY FAILED: " + "; ".join(bad))
     sys.exit(3)
 print(f"SELF-PLAY OK: completed {n_decisions} steps")
 sys.exit(0)
@@ -73,11 +86,12 @@ def main() -> int:
         with tarfile.open(bundle) as tar:
             tar.extractall(tmp)  # noqa: S202 - our own freshly-built bundle
         print(f"extracted {bundle} -> {tmp}")
-        print("running self-play (this exercises real decisions; "
-              "may take a few minutes)...\n")
+        print("running self-play (this exercises real decisions under the "
+              "adaptive budget;\nboth agents think at ~6.75 s/move, so "
+              "expect 10-20 minutes, not seconds)...\n")
         proc = subprocess.run(
             [sys.executable, "-c", _SELF_PLAY],
-            cwd=tmp, text=True, timeout=900,
+            cwd=tmp, text=True, timeout=SELF_PLAY_TIMEOUT,
         )
         return proc.returncode
 

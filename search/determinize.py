@@ -30,6 +30,14 @@ callers may pass ``opponent_deck_list=None`` together with a
 ``filler_card`` id to fall back to the public-notebook strategy for
 the unknown remainder. The baseline experiments never use the filler
 path.
+
+A third condition sits between those two: pass a full 60-card list
+with ``opponent_list_is_assumed=True`` to model the opponent with a
+*guess* (e.g. our own list — the `ismcts-selfdeck` arm, EXP-010).
+The guess is wrong against a real field, but it is a legal, coherent
+deck the simulated opponent can actually pilot, whereas the filler
+produces a board no game could reach. Strict accounting is relaxed on
+the opponent's side only; our side stays exact.
 """
 
 from __future__ import annotations
@@ -222,6 +230,22 @@ def _hidden_pool(
     return list(pool.elements())
 
 
+def _hidden_pool_assumed(deck_list: list[int], visible: Counter) -> list[int]:
+    """Hidden pool under an *assumed* (possibly wrong) opponent list.
+
+    Visible opponent cards that do exist in the assumed list consume
+    their copies (the sampled worlds stay consistent with what we have
+    seen where the assumption overlaps reality); visible cards outside
+    the list are simply not subtracted — they sit on the board, not in
+    a hidden zone, so they impose no constraint on what we imagine the
+    hidden zones contain. ``Counter.elements()`` drops non-positive
+    counts, which is exactly the clamp we want.
+    """
+    pool = Counter(deck_list)
+    pool.subtract(visible)
+    return list(pool.elements())
+
+
 def _draw(pool: list[int], need: int, label: str, obs: dict,
           rng: random.Random) -> list[int]:
     """Shuffle and take `need` cards from the pool, tolerating up to
@@ -243,6 +267,7 @@ def sample_determinization(
     rng: random.Random,
     filler_card: int | None = None,
     basic_ids: set[int] | None = None,
+    opponent_list_is_assumed: bool = False,
 ) -> dict[str, list[int]]:
     """Sample a hidden assignment consistent with the observation.
 
@@ -257,14 +282,22 @@ def sample_determinization(
         basic_ids: Card ids legal in the active slot. ``None`` loads
             the engine card database lazily (`basic_pokemon_ids`).
             Only consulted when the opponent's active is unrevealed.
+        opponent_list_is_assumed: Treat ``opponent_deck_list`` as a
+            guess rather than ground truth. Strict accounting is
+            relaxed on the opponent's side only: visible cards outside
+            the assumed list no longer raise (they are just not
+            subtracted), and the hidden pool may exceed the needed
+            count (the surplus is left undrawn). Our own side keeps
+            strict accounting either way.
 
     Returns:
         Keyword arguments for `env.search_engine.search_begin`.
 
     Raises:
         DeterminizationError: If the card accounting does not close
-            within ``POOL_SLACK``, or no Basic is available for an
-            unrevealed enemy active.
+            within ``POOL_SLACK`` (strict mode), the assumed pool
+            cannot cover the hidden zones (assumed mode), or no Basic
+            is available for an unrevealed enemy active.
     """
     want = expected_counts(obs)
     vis_mine, vis_theirs = visible_cards(obs)
@@ -280,7 +313,10 @@ def sample_determinization(
     need_opp = (want["enemy_deck"] + want["enemy_prize"]
                 + want["enemy_hand"] + want["enemy_active"])
     if opponent_deck_list is not None:
-        pool_opp = _hidden_pool(opponent_deck_list, vis_theirs, "opponent")
+        if opponent_list_is_assumed:
+            pool_opp = _hidden_pool_assumed(opponent_deck_list, vis_theirs)
+        else:
+            pool_opp = _hidden_pool(opponent_deck_list, vis_theirs, "opponent")
 
         # The unrevealed active must be a Basic Pokémon — an Energy or
         # Trainer there is an invalid state the engine rejects
@@ -302,7 +338,22 @@ def sample_determinization(
                 pool_opp.remove(card)
 
         rest_need = need_opp - want["enemy_active"]
-        drawn_opp = _draw(pool_opp, rest_need, "opponent", obs, rng)
+        if opponent_list_is_assumed:
+            # An assumed list is generally *larger* than the hidden
+            # need (foreign visible cards subtract nothing), so the
+            # strict excess check would reject every non-mirror game.
+            # Undershoot still fails loud: it means the assumption
+            # cannot even populate the board the engine requires.
+            if len(pool_opp) < rest_need:
+                raise DeterminizationError(
+                    f"opponent (assumed list): pool has {len(pool_opp)} "
+                    f"cards, engine needs {rest_need} | census: "
+                    f"{_zone_census(obs)}"
+                )
+            rng.shuffle(pool_opp)
+            drawn_opp = pool_opp[:rest_need]
+        else:
+            drawn_opp = _draw(pool_opp, rest_need, "opponent", obs, rng)
     else:
         if filler_card is None:
             raise DeterminizationError(

@@ -5,7 +5,7 @@
 | Risk | Likelihood | Impact | Mitigation | Status |
 |---|---|---|---|---|
 | SDK access delay past Week 1 | Low | Blocks everything | Verify Day 1 of Phase 0; pull the Kaggle Docker image | open |
-| Per-match 10-min budget binds ISMCTS below useful sim count | Medium | Reduces H3 signal | Phase 4 time-budget calibration | open |
+| Per-match 10-min budget binds ISMCTS below useful sim count | Medium | Reduces H3 signal; **materialized** — EXP-007 forfeited 11–24% vs grindy fields, even current-v1 p90 617 s | **Resolved by EXP-008 (#27), 2026-07-16.** Adaptive Policy C (`adaptive_budget=True`, `overage_reserve=60`, `budget_moves_ahead=80`) reads the live `remainingOverageTime` and allocates from it, so it **cannot deplete the bank by construction** — no $M$ prediction, hence no exposure to an unknown ladder field. Confirmed over 80 games: 0 forfeits, cumulative p99 310.7 s vs the 540 s gate. `notes/phase4-time-budget-calibration.md` | mitigated |
 | Pre-registered hypothesis rejected close to Sep 13 | Medium | Writeup scramble | Report null findings as findings | open |
 | Statistical machinery overengineered vs sample size | Medium | Time drain | `ex05` sample-size analysis first | open |
 | Only 2 most recent submissions are active on the ladder | Medium | A broken upload burns an active slot | Always run `main.py` in the Docker image before uploading; Validation Episode is not the first line of defense | open |

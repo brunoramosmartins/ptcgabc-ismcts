@@ -22,7 +22,7 @@ def test_all_wins_upper_bound_below_one() -> None:
 
 def test_all_losses_lower_bound_above_zero() -> None:
     lo, hi = wilson_interval(0, 10)
-    assert lo == 0.0 or 0.0 < lo
+    assert lo >= 0.0
     assert 0.0 < hi < 1.0
 
 

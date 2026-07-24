@@ -52,6 +52,250 @@ each status change.)_
 
 ## Ideas
 
+### replay-deck-mining — Recover real opponent decklists from public episode replays
+
+**Motivation.**
+Every deck condition we have ever tested was authored by us, and every
+time the authored condition diverged from deployment (H1's mirror,
+EXP-009's filler, ADR-002's homemade pool). The public leaderboard meta
+snapshot (`myso1987/ptcg-ai-battle-leaderboard-deck-meta-by-score-band`,
+2026-07-16) ends the excuse: in our nearest band (500–599) the top ten
+archetypes cover 88 % of classified teams, and we hold lists for **~39 %**
+of it (Mega Lucario 24 %, Dragapult 10 %, our own mirror 5 %). The other
+~60 % — Mega Starmie 13 %, Crustle Wall 12 %, Alakazam 11 %, Marnie
+Grimmsnarl 5 % — are decks we have never simulated once. Alakazam alone is
+first in *every* band above 700 and 47 % of the 900–999 band.
+
+**Formal statement.**
+A public episode replay carries the submitted decks verbatim: the deck
+submission is the agent's **first action**, so `steps[1][seat]["action"]`
+is the 60-card list (schema confirmed by reading the meta notebook's
+`extract_decks`, with a `visualize`-based fallback for older replays).
+For each target archetype $k$, mine $n_k$ lists from replays of teams the
+published marker rules classify as $k$, and store them under
+`decks/candidates/mined/<archetype>-<band>-<i>.csv`, validated by
+`battle_start` exactly as the starter decks were. Two consumers:
+
+1. **EXP-011's opponent pool** (deck re-evaluation) — replace "the four
+   starter decks" (an assumption) with an empirical field weighted by
+   band share, plus an honest statement of what the residual tail leaves
+   uncovered.
+2. **[[informed-determinization]]** — the marker rules *are* a
+   classifier over ~10–20 archetypes. Observing the opponent's public
+   cards in play induces a posterior over archetypes; determinizing from
+   the inferred list replaces `FILLER_CARD = 1072` (Snorlax, adopted from
+   an official sample whose own comment reads "There is no deep meaning").
+   The hypothesis space is enumerable, which is what makes this tractable
+   at all.
+
+**Two things this does NOT license.**
+Piloting is confounded with the deck in the meta table: a starter deck
+sitting low may reflect its stock rule-based agent, not the list. Mining
+a list lets us *strip* that confound by piloting every deck with our own
+agent (EXP-007's design) — it does not let us read deck strength off the
+leaderboard. Second, the meta notebook deliberately publishes aggregates
+only and no decklists; that restraint should carry into our artifacts —
+mined lists are simulation inputs under `vendor/`-style hygiene, and the
+writeup cites archetype *shares*, never another team's list.
+
+**Rules check required before running.** The technique reads Kaggle's
+public replay interface and the well-received meta notebook does exactly
+this, but "does the competition permit mining opponent decks" is a
+question for the Competition Rules, not for our inference. Confirm before
+the first collection run.
+
+**Literature.**
+- Cowling, Powley & Whitehouse 2012, §4: ISMCTS determinizes by sampling
+  $h \sim P(h \mid I)$; the prior's quality is the whole game, and ours is
+  currently a constant.
+- [PTCG Replay Data Miner](https://www.kaggle.com/code/llccqq624/ptcg-replay-data-miner)
+  — credited by the meta notebook as the source of the extraction approach.
+- The meta snapshot itself, for band weights and the marker rules.
+
+**Where in the roadmap.**
+Gated on EXP-009: if filler determinization is *not* what costs us
+(branch c), the determinization consumer evaporates and only the EXP-011
+pool argument survives. Collection is API-bound, not CPU-bound, so it can
+overlap any running experiment.
+
+**Risk to scope.**
+Kaggle API pacing dominates: the meta run needed 1,717 requests at ≥1 s
+spacing with 60 s cooldowns per 100, ~30+ min for 595 teams. Mining a
+handful of lists per archetype is far smaller. HTTP 429 is not retried by
+that codebase's own policy — copy the pacer, don't fight it. Real risk is
+scope creep into a data-engineering project a month before the deadline;
+descope to *one* list per top-5 archetype if it grows.
+
+**Status.**
+idea (2026-07-16), gated on EXP-009's verdict and a Competition Rules
+check.
+
+### trajectory-corpus — Log full self-play trajectories as future training data
+
+**Motivation.**
+ADR-003 rejected a learned evaluator on four grounds, one of which — "no
+labelled training data exists" — has been false since 2026-07-09: every
+experiment since EXP-003 is instrumented self-play whose outcome we know,
+and ~3,600 matches (~50–60 h of CPU) were reduced to 788 KB of win/loss
+rows because nothing recorded the decisions. The scoreboard was the right
+thing to keep for EXP-003–009 (every hypothesis was about win rate), but
+we now have questions the scoreboard cannot answer, and every future
+CPU-hour that runs unlogged is unrecoverable. The marginal cost of
+recording is near zero when the games are being played anyway.
+
+**Formal statement.**
+`scripts/local_ladder.py --log-trajectories PATH.jsonl.gz` (implemented
+2026-07-16) wraps each seat's agent so every real decision appends
+$(o_t, a_t)$, and the match row appends the terminal reward $r_T$ — one
+gzip member per match, so resume composes with `--append`. Each decision
+becomes one supervised sample $(o_t, a_t, r_T)$: enough for a value head
+$\hat V(o)$ trained on outcome regression (the ADR-003 stretch design)
+and for behavioral cloning of the search's move choices. Recording is
+opt-in and must stay OFF for timing-sensitive runs (it serializes a
+deep-copied obs per decision, and EXP-008-style measurements would absorb
+that cost into $c(\text{it})$).
+
+**Honest volume math (author's own caveat, 2026-07-16).** At $M \approx
+23$ decisions/agent/game, EXP-010-scale runs (~500 games) yield ~23k
+decisions per seat — two to three orders of magnitude below AlphaZero-style
+regimes. A corpus that *matters* needs either many more games (cheap
+low-iteration self-play generates data fastest) or a deliberately modest
+target: a small value head to replace random rollout evaluation does not
+need millions of samples to beat "nothing". Map the corpus size honestly
+before promising a Phase-7 result on it.
+
+**Literature.**
+- Silver et al. 2016 (AlphaGo), §Methods: value network trained on
+  self-play outcome regression — the shape of the label we are storing.
+- Anthony, Tian & Barber 2017 (ExIt): expert iteration — the search is
+  the expert, the net clones it; exactly the $(o_t, a_t)$ half.
+- The competition's own RL sample (Kaggle starter kit): transformer over
+  sparse obs encodings reaches 76 % vs random after 5 self-play epochs —
+  a calibration point, since our zero-training heuristic scores 75.5 %.
+
+**Where in the roadmap.**
+Collection starts with EXP-010 (its registration must name
+`--log-trajectories` in the configuration, both so the corpus provenance
+is recorded and so the timing caveat is visible). Training is **Phase 7
+stretch only** (roadmap: "Optional (Phase 7 only): PyTorch"), after the
+Strategy deadline — ADR-003's other three grounds (deadline, no GPU on
+the worker, H4 confounding) still stand and are not up for relitigation
+here.
+
+**Risk to scope.**
+Near zero at collection time (a flag on runs that happen anyway; results/
+is gitignored, and ~500 games ≈ 0.5–1 GB uncompressed shrinks ~10× under
+gzip). The real risk is the temptation to *train* before Phase 7 — the
+mitigation is this entry's explicit gate.
+
+**Status.**
+scoped (2026-07-16): collection implemented, first use gated on EXP-010's
+registration; training gated on Phase 7.
+
+### threat-aware-evaluator — Model the opponent in the evaluator, not in the simulation
+
+**Motivation.**
+A public notebook analyzed 2026-07-17 (a Mega Lucario ex agent — the #1
+archetype of our score band) sits above us on the public ladder while
+doing **no opponent determinization at all**. Its architecture is a
+hand-crafted move-scoring policy, a 1-ply UCB1 verification search that
+rolls out only to the end of the agent's *own* turn, and a static
+evaluator that models the opponent as an aggregate threat: assume each
+opposing Pokémon attaches one more energy, compute the maximum damage it
+could then deal, and penalize states where our active dies to it
+(weighted by the prizes we would concede — it explicitly manages the
+3-prize Mega ex trade, including counter-play keyed to *our* archetype's
+visible board IDs). This is a third answer to the hidden-information
+problem, and it triangulates EXP-009 from the other side:
+
+| condition | opponent model | evidence |
+|---|---|---|
+| filler (ours, deployed) | impossible-and-inert, simulated deep | −27.4 pp (EXP-009) |
+| self-deck (ours, EXP-010) | wrong-but-coherent, simulated deep | pending |
+| threat-aware (theirs) | none simulated; worst-case aggregate in $V(s)$ | above us publicly |
+
+The differential of that agent is **game knowledge, not computation**:
+archetype detection by set membership over revealed card IDs, prize-trade
+math, deck-out defense, matchup-specific constants. It spends ~1.5 s per
+decision against our adaptive ~6.75 s and wins anyway.
+
+**Attribution caveat (recorded with the observation).** The public score
+attaches to the *team*, updates continuously on a non-stationary ladder
+(our own frozen heuristic drifted 38 points in 11 days), and cannot be
+pinned to this exact notebook version — the author may have stronger
+private submissions. Directional evidence only; nothing here is a
+measured comparison.
+
+**Formal statement.**
+Add an opponent-threat term to the Phase-4 evaluator (Issue #23) instead
+of (or alongside) simulating the opponent's hidden hand. For a state $s$
+with our active $a$ and opposing board $B$:
+
+$$
+T(s) \;=\; \max_{p \in B} \; D\!\bigl(p,\; e_p + 1\bigr),
+$$
+
+where $D(p, e)$ is the maximum damage Pokémon $p$ deals with $e$
+energies (computable from public card data — no hidden information
+required), and the evaluator takes a penalty $-\lambda \cdot
+\text{prizes}(a) \cdot \mathbb{1}\{T(s) \ge \text{hp}(a)\}$ plus a
+proportional term below lethal. Two consumers, in order of fit:
+
+1. **A feature in the evaluator/MoveScorer** — which makes it one more
+   column in H4's pre-registered per-feature ablation (Phase 5), so its
+   value gets measured, not assumed.
+2. **Truncated-rollout evaluation** — roll out $d$ plies then apply
+   $V(s)$ instead of playing to terminal, sidestepping the opponent-turn
+   simulation that EXP-009 showed is worthless under a bad hidden-state
+   model. This is a deeper change to the search and is post-EXP-010
+   material at the earliest.
+
+The concept transfers; the constants must not — every weight we adopt
+gets derived from our own card data and ablated, not transcribed from a
+public notebook.
+
+**Literature.**
+- Browne et al. 2012, §6.1 (evaluation-enhanced MCTS): truncating
+  rollouts into a static evaluator is standard where full playouts are
+  noisy or expensive — Lorentz's Amazons results are the canonical win.
+- Sheppard 2002 (*World-championship-caliber Scrabble*): shallow
+  simulation plus a knowledge-heavy static evaluation beating deeper but
+  less-informed search — the closest architectural ancestor of the
+  observed agent.
+- Sturtevant & Bowling 2006: opponent modeling folded into search
+  values rather than explicit hidden-state sampling.
+
+**Where in the roadmap.**
+Issue #23 (Phase 4, evaluator design) is the natural intake for the
+threat term as a *feature*; H4 (Phase 5) then ablates it with the same
+Bonferroni-corrected paired machinery as every other feature — no
+amendment to the pre-registered hypotheses needed. The truncated-rollout
+consumer waits on EXP-010's verdict: if self-deck recovers most of the
+gap, deep simulation stays; if not, evaluation-based truncation becomes
+the live alternative. Also a candidate Phase-5 diagnostic arm
+("1-ply + evaluator" control) to place deep search against a
+shallow-knowledge baseline — same role the PIMC arm played for the tree.
+
+**Risk to scope.**
+The observed agent embodies hundreds of hand-tuned constants; chasing
+that is a tuning rabbit hole with no experimental story and directly
+conflicts with our differential (registered, measured comparisons).
+Descope rule: the threat term enters as **one feature with one weight**,
+measured by H4, or it does not enter at all.
+
+**Status.**
+
+- **idea** — 2026-07-17, distilled from a public-notebook analysis
+  (chat record); no code or constants copied, per the same restraint
+  rule as [[replay-deck-mining]].
+- **in progress (Phase 4)** — 2026-07-23: consumer 1 implemented under
+  the descope rule as feature **F7** (`evaluator/threat.py` +
+  `MoveScorer`; design note "F7 intake" section). Inert by default
+  (`threat=None`); its value gets measured by the H2 re-test and the
+  H4 ablation (now k = 7), not assumed. Consumer 2
+  (truncated-rollout evaluation) stays parked — EXP-010's verdict was
+  that self-deck recovers ~11 of the 16 pp, so deep simulation stays.
+
 ### informed-determinization — Non-uniform $P(h \mid I)$ using public information
 
 **Motivation.**
@@ -738,6 +982,59 @@ CIs. Note ISMCTS's determinizer already supports asymmetric lists
 
 - **idea** — 2026-07 (raised by Bruno after watching ladder replays:
   "o deck dos adversários é diferente — exploramos outros decks?").
+- **in progress (Phase 4)** — 2026-07-10: `scripts/local_ladder.py`
+  now takes `--deck-a` / `--deck-b` (builder contract passes both true
+  lists, so consistency holds in asymmetric matchups);
+  `scripts/analyze_card_pool.py` surveys the pool. Round-robin process
+  documented in `notes/phase4-deck-selection.md`. The Phase-5
+  exploratory question (per-matchup H1 check) remains open.
+
+---
+
+### official-starter-as-candidate — Test the official Mega Abomasnow starter list as *our* deck
+
+**Motivation.**
+ADR-002's erratum identified the official Mega Abomasnow ex starter as
+"the most informative candidate available" — same archetype as
+`current-v1`, but a support suite The Pokémon Company tuned a rule-based
+agent around, differing in 11 of 60 cards. EXP-011 paid the erratum's
+re-evaluation debt with the official lists on the *opponent* side only;
+no experiment has ever piloted that list from our seat. One suggestive
+but confounded data point exists: `ismcts-selfdeck` piloting
+`current-v1` beats `heuristic` piloting the official list 36–14
+(EXP-010/011 shared cell) — but that mixes the agent gap with the deck
+gap.
+
+**Formal statement.**
+Add `official-abomasnow` as a fifth candidate row to the EXP-011 design:
+`ismcts-selfdeck` (1000 iters) piloting the official list vs `heuristic`
+on the four official starters, N = 50 paired seeds 1..50 — cell-identical
+protocol, directly comparable to the existing grid. Same selection rule
+as EXP-011 (pooled paired McNemar vs `current-v1` on shared seeds,
+worse-cell Wilson guard, tie to the incumbent).
+
+**Literature.**
+None needed — this is a candidate-set completion of EXP-007/EXP-011, not
+a new method. The construct-validity framing is already recorded in
+ADR-002's erratum and the registry.
+
+**Where in the roadmap.**
+Phase 5 at the earliest, and only if the ladder shows `current-v1`
+underperforming its local numbers. EXP-011's margins (the incumbent beat
+every tested challenger; the two Fire decks are significantly worse)
+make this exploration, not a gate — it must not displace #28/#29 or the
+threat-aware-evaluator work.
+
+**Risk to scope.**
+~200 matches ≈ 7–20 h of CPU at observed paces. Zero code: the runner
+already takes `--deck-a`. The real cost is attention this close to the
+Simulation deadline; descope by simply not running it before Aug 16.
+
+**Status.**
+
+- **idea** — 2026-07-23 (named as the honest residual in ADR-002's
+  Reaffirmation: EXP-011 closed on branch (a) without ever testing the
+  erratum's "most informative missing candidate" from our seat).
 
 ---
 

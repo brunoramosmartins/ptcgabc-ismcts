@@ -24,7 +24,7 @@ canonical representation of the option content, not by index.
 
 from __future__ import annotations
 
-from typing import Hashable, Iterable
+from collections.abc import Hashable, Iterable
 
 ActionKey = Hashable
 
