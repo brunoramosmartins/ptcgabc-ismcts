@@ -860,3 +860,32 @@ public notebook (weights derive from our card CSV and the uniform
 W = 1.0); the truncated-rollout consumer stays parked; no change to
 `submissions/ismcts_main.py` — F7 and EXP-012 are exactly the split
 between the parallel track and the deadline track.
+
+### 2026-07-23 — EXP-012 passes on branch (a): the shipping artifact reproduces the measured strength; #29 unblocked
+
+**Decision.** The complete grid (4 cells × 50 paired seeds) ran
+through `scripts/exp012_analysis.py` and both pre-registered gates
+pass. Gate 1: **zero env errors, zero TIMEOUTs, zero fallbacks** in
+200 ladder-faithful matches under the default 600 s bank — Policy C's
+cannot-deplete-by-construction property held on the real clock, not
+just in ex04's derivation. Gate 2: shipping pooled 0.775 [0.712,
+0.827] vs instrument 0.795 [0.734, 0.845], paired Δ = −2.0 pp,
+McNemar p = 0.699 — indistinguishable. **BRANCH (a): #28 is done and
+#29 submits the artifact unchanged**; the row #5 pre-upload checklist
+governs from here (registry Actual filled = step 1).
+
+**Two calibration notes kept.** (1) The prior leaned "slightly
+stronger" (the local clock yields >1000 iters/move); the observed
+direction was mildly negative and n.s. — recorded so the prior's
+miss is visible, not smoothed over. (2) The sweep finished in roughly
+half the ~18 h estimate: ex04 §6's geometric spend model is an upper
+bound (fast forced selects spend almost nothing; games end well
+before m = 65), so local ETAs derived from it run conservative by
+~2×. Median match: 101–166 s across cells.
+
+**What this closes.** Phase 4's experimental chain is complete:
+EXP-007/011 (deck) → EXP-008 (clock) → EXP-009/010 (determinization)
+→ EXP-012 (the assembled artifact, end-to-end). Every configuration
+choice in `submissions/ismcts_main.py` now traces to a registered
+experiment, and the last measurement was of the artifact itself
+rather than any proxy for it.
