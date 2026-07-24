@@ -110,6 +110,20 @@ peek changed N, the rule, or the stopping point.
 **One-liner:** interim looks were taken and disclosed; decision rules
 ran only on complete, pre-registered designs.
 
+## 8. Process discipline — submission sequencing slipped twice
+
+Two of five uploads deviated from the declared order: row #4 was logged
+after upload; row #5 was uploaded before the PR/tag existed and with
+the linter still red (submission-log process notes, 2026-07-16 and
+2026-07-23). Both deviations were benign in content — expected-effect
+fields were written before any rating existed, and row #5's bundle
+files were byte-identical to the eventually tagged state — and both
+are recorded the same day rather than cleaned up. The checklist's
+value here is exactly that the record shows its own violations.
+
+**One-liner:** two submissions deviated from the upload checklist's
+sequencing; both deviations are logged, dated, and content-benign.
+
 ---
 
 *Compression target for `writeup.md` §7: threats 1, 2 and 4 carry the
