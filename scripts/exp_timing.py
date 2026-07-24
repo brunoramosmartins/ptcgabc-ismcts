@@ -56,7 +56,7 @@ import random
 import statistics
 import sys
 import time
-from typing import Callable
+from collections.abc import Callable
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:

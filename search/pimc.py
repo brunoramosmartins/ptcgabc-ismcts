@@ -25,6 +25,7 @@ from __future__ import annotations
 import random
 from collections import Counter
 
+from env import search_engine
 from search.determinize import sample_determinization
 from search.ismcts import (
     _map_key_to_indices,
@@ -33,7 +34,6 @@ from search.ismcts import (
 )
 from search.node import InfoSetNode
 from search.ucb import DEFAULT_C
-from env import search_engine
 
 DEFAULT_K = 10
 

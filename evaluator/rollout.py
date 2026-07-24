@@ -14,7 +14,8 @@ Returned callables match `search.ismcts` rollout contract:
 from __future__ import annotations
 
 import random
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from env import search_engine
 from evaluator.heuristic import MoveScorer

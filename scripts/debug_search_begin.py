@@ -30,10 +30,15 @@ if str(REPO_ROOT) not in sys.path:
 from kaggle_environments.envs.cabt.cg import sim  # noqa: E402
 
 from env.search_engine import (  # noqa: E402
-    SearchApiError, expected_counts, search_begin, search_end,
+    SearchApiError,
+    expected_counts,
+    search_begin,
+    search_end,
 )
 from search.determinize import (  # noqa: E402
-    DeterminizationError, sample_determinization, visible_cards,
+    DeterminizationError,
+    sample_determinization,
+    visible_cards,
 )
 
 SNORLAX, BASIC_ENERGY = 1072, 1

@@ -9,7 +9,6 @@ import pytest
 from search.node import InfoSetNode
 from search.ucb import DEFAULT_C, select_action, ucb1_score
 
-
 # --- InfoSetNode -----------------------------------------------------------
 
 def test_new_node_is_zeroed() -> None:

@@ -13,7 +13,9 @@ from collections import Counter
 import pytest
 
 from search.determinize import (
-    DeterminizationError, sample_determinization, visible_cards,
+    DeterminizationError,
+    sample_determinization,
+    visible_cards,
 )
 
 ME, OPP = 0, 1
