@@ -109,7 +109,7 @@ class ThreatModel:
         self.db = db
 
     @classmethod
-    def from_csv(cls, csv_path: pathlib.Path | str = DEFAULT_CSV) -> "ThreatModel":
+    def from_csv(cls, csv_path: pathlib.Path | str = DEFAULT_CSV) -> ThreatModel:
         """Build the model from the card CSV (the production path)."""
         return cls(load_threat_db(csv_path))
 

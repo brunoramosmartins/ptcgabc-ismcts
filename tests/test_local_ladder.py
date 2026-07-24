@@ -238,7 +238,7 @@ def test_overage_bank_patch_survives_env_reset() -> None:
     # make() time — silently restoring the 600 s bank (TIMEOUT rows at
     # ~600 s with the bank nominally raised to 100000). The fix must
     # survive a reset, so that is exactly what this test does.
-    kaggle_environments = pytest.importorskip("kaggle_environments")
+    pytest.importorskip("kaggle_environments")
 
     from scripts.local_ladder import _raise_overage_bank
 
@@ -255,7 +255,7 @@ def test_raised_bank_also_unbinds_run_timeout() -> None:
     # raised DeadlineExceeded, aborting the sweep (no row written).
     # runTimeout is honored from env.configuration, so the env factory
     # must raise it whenever the bank is raised.
-    kaggle_environments = pytest.importorskip("kaggle_environments")
+    pytest.importorskip("kaggle_environments")
 
     from scripts.local_ladder import _make_cabt_env
 
@@ -269,7 +269,7 @@ def test_raised_bank_also_unbinds_run_timeout() -> None:
 def test_default_bank_keeps_ladder_run_timeout() -> None:
     # Ladder-faithful runs (EXP-003..010 semantics) must keep the cabt
     # default runTimeout untouched.
-    kaggle_environments = pytest.importorskip("kaggle_environments")
+    pytest.importorskip("kaggle_environments")
 
     from scripts.local_ladder import _make_cabt_env
 

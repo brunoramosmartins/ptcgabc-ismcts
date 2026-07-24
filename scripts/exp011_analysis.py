@@ -190,7 +190,8 @@ def paired_contrast(
     p_raw = binomtest(only_c, discordant, 0.5).pvalue if discordant else float("nan")
     delta = (only_c - only_i) / total
     print(f"{challenger} vs {INCUMBENT} (paired, n={total}):")
-    print(f"  both={both}  only-{challenger}={only_c}  only-{INCUMBENT}={only_i}  neither={neither}")
+    print(f"  both={both}  only-{challenger}={only_c}  "
+          f"only-{INCUMBENT}={only_i}  neither={neither}")
     print(
         f"  Delta={delta:+.3f} ({delta * 100:+.1f} pp)  McNemar exact "
         f"p={p_raw:.3g}  Bonferroni(m={M_CHALLENGERS}) p={min(1.0, M_CHALLENGERS * p_raw):.3g}"
